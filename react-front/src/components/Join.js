@@ -171,11 +171,31 @@ function Join() {
     .catch(err => alert("서버 가입 처리 통신 실패"));
   };
 
+  // 1. 구글 로그인
   const handleGoogleLogin = () => {
     const clientFileId = "543671638677-cusv4p5t4vp7v5j1klnqu61f97tgoc4i.apps.googleusercontent.com"; 
     const redirectUri = "http://localhost:3010/user/google/callback";
     const googleUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientFileId}&redirect_uri=${redirectUri}&response_type=code&scope=email%20profile&prompt=select_account`;
     window.location.href = googleUrl;
+  };
+
+  // 2. 카카오 로그인
+  const handleKakaoLogin = () => {
+    const kakaoClientId = "cfd19921bce3642b8c6f074cc94a64df"; 
+    const redirectUri = "http://localhost:3010/user/kakao/callback";
+    const kakaoUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${kakaoClientId}&redirect_uri=${redirectUri}&response_type=code`;
+    window.location.href = kakaoUrl;
+  };
+
+  // 1. 네이버 로그인창으로 이동하는 함수 만들기
+  const handleNaverLogin = () => {  
+    const naverClientId = "HLLE39y9zcLFjrAOJNEf"; 
+    const redirectUri = "http://localhost:3010/user/naver/callback";
+    
+    // ✨ 네이버 필수 항목: 해킹 방지용 무작위 난수(state) 생성
+    const state = Math.random().toString(36).substring(3, 14); 
+    const naverUrl = `https://nid.naver.com/oauth2.0/authorize?response_type=code&client_id=${naverClientId}&redirect_uri=${redirectUri}&state=${state}`;
+    window.location.href = naverUrl;
   };
 
   return (
@@ -279,8 +299,8 @@ function Join() {
         <Divider sx={{ my: 3 }}>or sign up with</Divider>
         <Stack direction="row" spacing={3} justifyContent="center" sx={{ mb: 1 }}>
           <Button onClick={handleGoogleLogin} sx={{ width: 46, height: 46, borderRadius: '50%', minWidth: 0, backgroundColor: '#ffffff', border: '1px solid #e0e0e0', color: '#757575', fontWeight: 'bold', fontSize: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', '&:hover': { backgroundColor: '#f5f5f5', border: '1px solid #ccc' } }}>G</Button>
-          <Button onClick={() => console.log('네이버 가입 클릭')} sx={{ width: 46, height: 46, borderRadius: '50%', minWidth: 0, backgroundColor: '#03C75A', color: '#ffffff', fontWeight: 'bold', fontSize: '16px', '&:hover': { backgroundColor: '#02b34f' } }}>N</Button>
-          <Button onClick={() => console.log('카카오 가입 클릭')} sx={{ width: 46, height: 46, borderRadius: '50%', minWidth: 0, backgroundColor: '#FEE500', color: '#191919', fontWeight: 'bold', fontSize: '16px', '&:hover': { backgroundColor: '#fada00' } }}>K</Button>
+          <Button onClick={handleNaverLogin} sx={{ width: 46, height: 46, borderRadius: '50%', minWidth: 0, backgroundColor: '#03C75A', color: '#ffffff', fontWeight: 'bold', fontSize: '16px', '&:hover': { backgroundColor: '#02b34f' } }}>N</Button>
+          <Button onClick={handleKakaoLogin} sx={{ width: 46, height: 46, borderRadius: '50%', minWidth: 0, backgroundColor: '#FEE500', color: '#191919', fontWeight: 'bold', fontSize: '16px', '&:hover': { backgroundColor: '#fada00' } }}>K</Button>
         </Stack>
         <Box sx={{ mt: 3, textAlign: 'center' }}>
           <Typography variant="body2" color="text.secondary">Already have an account? <Link href="/login" underline="hover">Sign in</Link></Typography>

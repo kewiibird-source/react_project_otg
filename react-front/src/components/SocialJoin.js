@@ -107,6 +107,10 @@ function SocialJoin() {
     .then(data => {
       alert(data.message);
       if (data.result) {
+        localStorage.setItem('accessToken', data.accessToken);
+        localStorage.setItem('refreshToken', data.refreshToken);
+        
+        console.log("소셜 가입 완료 유저 세션 정보:", data.user);
         navigate("/home"); 
       }
     })

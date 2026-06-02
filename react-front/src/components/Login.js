@@ -28,22 +28,60 @@ function Login() {
     })
     .then(res => res.json())
     .then(data => {
-      alert(data.message); // 백엔드가 보낸 메시지 ("로그인 성공!", "비밀번호가 일치하지 않습니다." 등)
+      alert(data.message); // 백엔드메시지 ("로그인 성공!")
       
       if (data.result) {
-        // [로그인 성공 시]
-        console.log("로그인 성공 유저 정보:", data.user);
+        // [로그인 성공 시: LocalStorage에 정보 저장]
         
-        // 나중에 세션이나 localStorage, 또는 리액트 Context에 유저 정보를 저장하는 로직이 여기에 들어갑니다!
-        // 예: localStorage.setItem("user", JSON.stringify(data.user));
+        // 주의: 'accessToken'과 'user'라는 키 이름은 백엔드 응답 구조에 맞춰 변경해야 합니다.
+        // 예: data.token으로 들어온다면 localStorage.setItem('accessToken', data.token); 으로 매핑
+        
+        if (data.accessToken) {
+            localStorage.setItem('accessToken', data.accessToken);
+        }
+        
+        if (data.refreshToken) {
+            localStorage.setItem('refreshToken', data.refreshToken);
+        }
 
-        navigate("/home"); // 🚀 App.js에 등록된 홈 화면으로 이동합니다.
+        if (data.user) {
+            // 객체는 문자열로 변환하여 저장해야 합니다.
+            localStorage.setItem('userInfo', JSON.stringify(data.user)); 
+        }
+        navigate("/home");
       }
     })
     .catch(err => {
       console.error("로그인 통신 에러:", err);
       alert("서버 통신 실패");
     });
+  };
+
+  // 1. 구글 로그인
+  const handleGoogleLogin = () => {
+    const clientFileId = "543671638677-cusv4p5t4vp7v5j1klnqu61f97tgoc4i.apps.googleusercontent.com"; 
+    const redirectUri = "http://localhost:3010/user/google/callback";
+    const googleUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientFileId}&redirect_uri=${redirectUri}&response_type=code&scope=email%20profile&prompt=select_account`;
+    window.location.href = googleUrl;
+  };
+
+  // 2. 카카오 로그인
+  const handleKakaoLogin = () => {
+    const kakaoClientId = "cfd19921bce3642b8c6f074cc94a64df"; 
+    const redirectUri = "http://localhost:3010/user/kakao/callback";
+    const kakaoUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${kakaoClientId}&redirect_uri=${redirectUri}&response_type=code`;
+    window.location.href = kakaoUrl;
+  };
+
+  // 1. 네이버 로그인창으로 이동하는 함수 만들기
+  const handleNaverLogin = () => {  
+    const naverClientId = "HLLE39y9zcLFjrAOJNEf"; 
+    const redirectUri = "http://localhost:3010/user/naver/callback";
+    
+    // ✨ 네이버 필수 항목: 해킹 방지용 무작위 난수(state) 생성
+    const state = Math.random().toString(36).substring(3, 14); 
+    const naverUrl = `https://nid.naver.com/oauth2.0/authorize?response_type=code&client_id=${naverClientId}&redirect_uri=${redirectUri}&state=${state}`;
+    window.location.href = naverUrl;
   };
 
   return (
@@ -96,46 +134,9 @@ function Login() {
 
         {/* 원형 소셜 로그인 버튼 스택 */}
         <Stack direction="row" spacing={3} justifyContent="center" sx={{ mb: 1 }}>
-          <Button
-            onClick={() => {
-                const clientFileId = "543671638677-cusv4p5t4vp7v5j1klnqu61f97tgoc4i.apps.googleusercontent.com"; 
-                const redirectUri = "http://localhost:3010/user/google/callback";
-                const googleUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientFileId}&redirect_uri=${redirectUri}&response_type=code&scope=email%20profile&prompt=select_account`;
-                
-                // 구글 로그인 페이지로 브라우저 이동!
-                window.location.href = googleUrl;
-                }}
-                sx={{
-                    width: 46, height: 46, borderRadius: '50%', minWidth: 0,
-                    backgroundColor: '#ffffff', border: '1px solid #e0e0e0', color: '#757575',
-                    fontWeight: 'bold', fontSize: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                    '&:hover': { backgroundColor: '#f5f5f5', border: '1px solid #ccc' }
-                }}
-            >
-                G
-            </Button>
-
-          <Button
-            onClick={() => console.log('네이버 로그인 클릭')}
-            sx={{
-              width: 46, height: 46, borderRadius: '50%', minWidth: 0,
-              backgroundColor: '#03C75A', color: '#ffffff', fontWeight: 'bold', fontSize: '16px',
-              '&:hover': { backgroundColor: '#02b34f' }
-            }}
-          >
-            N
-          </Button>
-
-          <Button
-            onClick={() => console.log('카카오 로그인 클릭')}
-            sx={{
-              width: 46, height: 46, borderRadius: '50%', minWidth: 0,
-              backgroundColor: '#FEE500', color: '#191919', fontWeight: 'bold', fontSize: '16px',
-              '&:hover': { backgroundColor: '#fada00' }
-            }}
-          >
-            K
-          </Button>
+          <Button onClick={handleGoogleLogin} sx={{ width: 46, height: 46, borderRadius: '50%', minWidth: 0, backgroundColor: '#ffffff', border: '1px solid #e0e0e0', color: '#757575', fontWeight: 'bold', fontSize: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', '&:hover': { backgroundColor: '#f5f5f5', border: '1px solid #ccc' } }}>G</Button>
+          <Button onClick={handleNaverLogin} sx={{ width: 46, height: 46, borderRadius: '50%', minWidth: 0, backgroundColor: '#03C75A', color: '#ffffff', fontWeight: 'bold', fontSize: '16px', '&:hover': { backgroundColor: '#02b34f' } }}>N</Button>
+          <Button onClick={handleKakaoLogin} sx={{ width: 46, height: 46, borderRadius: '50%', minWidth: 0, backgroundColor: '#FEE500', color: '#191919', fontWeight: 'bold', fontSize: '16px', '&:hover': { backgroundColor: '#fada00' } }}>K</Button>
         </Stack>
 
         {/* 하단 회원가입 링크 이동 박스 */}

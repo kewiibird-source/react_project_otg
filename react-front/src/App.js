@@ -7,11 +7,11 @@ import Home from './components/Home';
 import Join from './components/Join';
 import Menu from './components/Menu';
 import SocialJoin from './components/SocialJoin';
+import Write from './components/Write';
 
 function App() {
   const location = useLocation();
   
-  // ✨ 1. 여기에 '/social-join' 이 완벽하게 추가되어야 사이드 메뉴가 예쁘게 숨겨집니다!
   const isAuthPage = 
     location.pathname === '/login' || 
     location.pathname === '/join' || 
@@ -38,6 +38,7 @@ function App() {
           <Route path="/join" element={<Join />} />
           <Route path="/home" element={<Home />} />
           <Route path="/social-join" element={<SocialJoin />} /> 
+          <Route path="/write" element={<Write />} /> 
         </Routes>
       </Box>
     </Box>
