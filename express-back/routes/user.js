@@ -7,6 +7,17 @@ const jwt = require('jsonwebtoken');
 const db = require("../db");
 const router = express.Router();
 
+const multer = require('multer');
+const jwtAuthentication = require('../auth'); 
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, 'uploads/'),
+    filename: (req, file, cb) => {
+        const decodedName = Buffer.from(file.originalname, 'latin1').toString('utf8');        
+        cb(null, Date.now() + '-profile-' + decodedName);
+    }
+});
+const upload = multer({ storage });
+
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 465,
@@ -177,7 +188,101 @@ router.post('/verify-email', async (req, res) => {
   }
 });
 
-// 6. 구글 소셜 로그인 콜백
+// 6. 로그아웃 (리프레시 토큰 무효화)
+router.post('/logout', async (req, res) => {
+  const { refreshToken } = req.body; 
+  let connection;
+
+  try {
+    if (!refreshToken) {
+      return res.json({ result: true, message: '토큰 없음. 클라이언트 로그아웃 진행.' });
+    }
+    connection = await db.getConnection();
+    const updateSql = `UPDATE refresh_tokens SET revoked = 'Y' WHERE refresh_token = :refreshToken`;
+    const result = await connection.execute(updateSql, { refreshToken }, dbOptions);
+
+    if (result.rowsAffected > 0) res.json({ result: true, message: '서버 토큰이 성공적으로 폐기되었습니다.' });
+    else res.json({ result: true, message: '이미 폐기되었거나 존재하지 않는 토큰입니다.' });
+  } catch (error) {
+    console.error('로그아웃 처리 중 오류:', error);
+    res.json({ result: false, message: '서버 로그아웃 처리 실패' }); 
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+
+// 7. 토큰 재발급 API (로그인 풀림 현상 해결)
+router.post('/refresh', async (req, res) => {
+    const { refreshToken } = req.body;
+    let connection;
+
+    if (!refreshToken) return res.status(401).json({ result: false, message: '리프레시 토큰이 누락되었습니다.' });
+
+    try {
+        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        const userId = decoded.id;
+        connection = await db.getConnection();
+
+        const sql = `SELECT USER_ID FROM refresh_tokens WHERE refresh_token = :refreshToken AND revoked = 'N' AND expires_at > CURRENT_TIMESTAMP`;
+        const result = await connection.execute(sql, { refreshToken }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+
+        if (result.rows.length === 0) return res.status(403).json({ result: false, message: '유효하지 않거나 폐기 및 만료된 리프레시 토큰입니다. 다시 로그인하세요.' });
+
+        const newAccessToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '30m' });
+        res.json({ result: true, accessToken: newAccessToken });
+    } catch (error) {
+        console.error('토큰 재발급 처리 중 오류:', error);
+        res.status(403).json({ result: false, message: '리프레시 토큰이 만료되었거나 검증에 실패했습니다.' });
+    } finally {
+        if (connection) await connection.close();
+    }
+});
+
+// ==============================================================
+// ✨ 8. 프로필 편집 API (안전한 상단 위치로 이동 + UPDATED_AT 쿼리 추가 완료!)
+// ==============================================================
+router.put('/profile', jwtAuthentication, upload.single('profileImage'), async (req, res) => {
+    let connection;
+    try {
+        connection = await db.getConnection();
+        const userId = req.user?.id || req.userId;
+        const { nickname, bio } = req.body;
+        const file = req.file;
+
+        // 1. 닉네임 중복 체크 (본인이 쓰던 닉네임은 통과)
+        const nickCheck = await connection.execute(
+            `SELECT ID FROM USERS WHERE NICKNAME = :nickname AND ID != :userId`, 
+            { nickname, userId }, { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        );
+        if (nickCheck.rows.length > 0) return res.json({ result: false, message: '이미 사용 중인 닉네임입니다.' });
+
+        // ✨ 2. 업데이트 쿼리 (UPDATED_AT = CURRENT_TIMESTAMP 완벽 적용)
+        let updateSql = `UPDATE USERS SET NICKNAME = :nickname, BIO = :bio, UPDATED_AT = CURRENT_TIMESTAMP`;
+        let params = { nickname, bio, userId };
+
+        let newProfileImageUrl = null;
+        if (file) {
+            const host = `${req.protocol}://${req.get('host')}/`;
+            newProfileImageUrl = host + file.destination + file.filename;
+            updateSql += `, PROFILE_IMAGE = :profileImageUrl`;
+            params.profileImageUrl = newProfileImageUrl;
+        }
+        updateSql += ` WHERE ID = :userId`;
+
+        await connection.execute(updateSql, params, { autoCommit: true });
+
+        res.json({ result: true, message: '프로필이 수정되었습니다.', newNickname: nickname, newProfileImage: newProfileImageUrl });
+
+    } catch(error) {
+        console.error('\n🚨 [PUT /user/profile] 프로필 수정 에러:\n', error);
+        res.status(500).json({ result: false, message: '프로필 수정 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) await connection.close();
+    }
+});
+// ==============================================================
+
+// 9. 구글 소셜 로그인 콜백
 router.get('/google/callback', async (req, res) => {
   const { code } = req.query;
   let connection;
@@ -208,18 +313,15 @@ router.get('/google/callback', async (req, res) => {
     let dbUser;
 
     if (findUserResult.rows.length > 0) {
-      // [기존 가입된 유저]
       dbUser = findUserResult.rows[0];
       if (dbUser.STATUS !== 'ACTIVE') return res.send('<script>alert("정지된 계정입니다."); location.href="http://localhost:3000/login";</script>');
       await connection.execute(`UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = :id`, [dbUser.ID], dbOptions);
       
-      // 공용 함수 (IP 기록 및 토큰 DB 저장)
       const { accessToken, refreshToken } = await processLoginSuccess(connection, dbUser.ID, req);
       const encodedNickname = encodeURIComponent(dbUser.NICKNAME);
       return res.redirect(`http://localhost:3000/home?loginSuccess=true&nickname=${encodedNickname}&accessToken=${accessToken}&refreshToken=${refreshToken}`);
       
     } else {
-      // [처음 온 유저]
       const emailCheckResult = await connection.execute(`SELECT provider FROM users WHERE email = :email`, [googleUser.email], dbOptions);
       if (emailCheckResult.rows.length > 0) {
         return res.send(`<script>alert("이미 [${emailCheckResult.rows[0].PROVIDER}] 계정으로 등록된 이메일입니다."); location.href="http://localhost:3000/login";</script>`);
@@ -240,7 +342,7 @@ router.get('/google/callback', async (req, res) => {
   }
 });
 
-// 카카오 소셜 로그인 콜백
+// 10. 카카오 소셜 로그인 콜백
 router.get('/kakao/callback', async (req, res) => {
   const { code } = req.query;
   let connection;
@@ -248,8 +350,6 @@ router.get('/kakao/callback', async (req, res) => {
   if (!code) return res.send('<script>alert("인증 코드가 없습니다."); location.href="http://localhost:3000/login";</script>');
 
   try {
-    // 1. 인가 코드로 카카오 Access Token 발급 받기
-    // 카카오는 구글과 다르게 데이터를 'x-www-form-urlencoded' 형식으로 보내야 합니다.
     const tokenParams = new URLSearchParams();
     tokenParams.append('grant_type', 'authorization_code');
     tokenParams.append('client_id', process.env.KAKAO_CLIENT_ID);
@@ -262,7 +362,6 @@ router.get('/kakao/callback', async (req, res) => {
 
     const { access_token: accessToken } = tokenResponse.data;
 
-    // 2. 발급받은 토큰으로 유저 정보 가져오기
     const userResponse = await axios.get('https://kapi.kakao.com/v2/user/me', {
       headers: { 
         Authorization: `Bearer ${accessToken}`,
@@ -271,36 +370,27 @@ router.get('/kakao/callback', async (req, res) => {
     });
 
     const kakaoUser = userResponse.data; 
-    
-    // 카카오는 id를 숫자로 주므로 안전하게 문자열로 변환합니다.
     const providerId = String(kakaoUser.id);
     const nickname = kakaoUser.properties?.nickname || '카카오유저';
     const profileImage = kakaoUser.properties?.profile_image || '';
-    
-    // 카카오는 이메일을 안 줄 수도 있으므로, 없을 경우 가짜 이메일을 생성합니다.
     const email = kakaoUser.kakao_account?.email || `kakao_${providerId}@kakao.com`;
 
     connection = await db.getConnection();
 
-    // 3. DB에 카카오로 가입한 내역이 있는지 조회
     const selectSql = `SELECT id, email, nickname, status FROM users WHERE provider = 'KAKAO' AND provider_id = :providerId`;
     const findUserResult = await connection.execute(selectSql, { providerId }, dbOptions);
 
     let dbUser;
 
     if (findUserResult.rows.length > 0) {
-      // [가입된 유저] 로그인 처리 후 메인 홈으로!
       dbUser = findUserResult.rows[0];
       if (dbUser.STATUS !== 'ACTIVE') return res.send('<script>alert("정지된 계정입니다."); location.href="http://localhost:3000/login";</script>');
       await connection.execute(`UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = :id`, [dbUser.ID], dbOptions);
 
-      // 공용 함수 (IP 기록 및 토큰 DB 저장)
       const { accessToken, refreshToken } = await processLoginSuccess(connection, dbUser.ID, req);
-      
       const encodedNickname = encodeURIComponent(dbUser.NICKNAME);
       return res.redirect(`http://localhost:3000/home?loginSuccess=true&nickname=${encodedNickname}&accessToken=${accessToken}&refreshToken=${refreshToken}`);
     } else {
-      // [처음 온 유저] 이메일 중복 검사 후 소셜 가입 폼(/social-join)으로!
       const emailCheckResult = await connection.execute(`SELECT provider FROM users WHERE email = :email`, [email], dbOptions);
       if (emailCheckResult.rows.length > 0) {
         return res.send(`<script>alert("이미 [${emailCheckResult.rows[0].PROVIDER}] 계정으로 등록된 이메일입니다."); location.href="http://localhost:3000/login";</script>`);
@@ -320,30 +410,24 @@ router.get('/kakao/callback', async (req, res) => {
   }
 });
 
-// [신규 API] 네이버 소셜 로그인 콜백
+// 11. 네이버 소셜 로그인 콜백
 router.get('/naver/callback', async (req, res) => {
-  // 네이버는 code와 함께 state 값도 같이 돌려보내 줍니다.
   const { code, state } = req.query;
   let connection;
 
   if (!code) return res.send('<script>alert("인증 코드가 없습니다."); location.href="http://localhost:3000/login";</script>');
 
   try {
-    // 1. 인가 코드로 네이버 Access Token 발급 받기
-    // 네이버는 GET 방식으로 토큰을 요청하는 것이 특징입니다.
     const tokenUrl = `https://nid.naver.com/oauth2.0/token?grant_type=authorization_code&client_id=${process.env.NAVER_CLIENT_ID}&client_secret=${process.env.NAVER_CLIENT_SECRET}&redirect_uri=${process.env.NAVER_REDIRECT_URI}&code=${code}&state=${state}`;
 
     const tokenResponse = await axios.get(tokenUrl);
     const { access_token: accessToken } = tokenResponse.data;
 
-    // 2. 발급받은 토큰으로 유저 정보 가져오기
     const userResponse = await axios.get('https://openapi.naver.com/v1/nid/me', {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
 
-    // ✨ 네이버만의 특징: 정보가 data.response 안에 한 겹 더 싸여 있습니다!
     const naverUser = userResponse.data.response; 
-
     const providerId = naverUser.id;
     const nickname = naverUser.nickname || '네이버유저';
     const profileImage = naverUser.profile_image || '';
@@ -351,25 +435,20 @@ router.get('/naver/callback', async (req, res) => {
 
     connection = await db.getConnection();
 
-    // 3. DB에 네이버로 가입한 내역이 있는지 조회 (기존 로직과 100% 동일)
     const selectSql = `SELECT id, email, nickname, status FROM users WHERE provider = 'NAVER' AND provider_id = :providerId`;
     const findUserResult = await connection.execute(selectSql, { providerId }, dbOptions);
 
     let dbUser;
 
     if (findUserResult.rows.length > 0) {
-      // [가입된 유저] 로그인 처리 후 메인 홈으로!
       dbUser = findUserResult.rows[0];
       if (dbUser.STATUS !== 'ACTIVE') return res.send('<script>alert("정지된 계정입니다."); location.href="http://localhost:3000/login";</script>');
       await connection.execute(`UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = :id`, [dbUser.ID], dbOptions);
 
-      // 공용 함수 (IP 기록 및 토큰 DB 저장)
       const { accessToken, refreshToken } = await processLoginSuccess(connection, dbUser.ID, req);
-      
       const encodedNickname = encodeURIComponent(dbUser.NICKNAME);
       return res.redirect(`http://localhost:3000/home?loginSuccess=true&nickname=${encodedNickname}&accessToken=${accessToken}&refreshToken=${refreshToken}`);
     } else {
-      // [처음 온 유저] 이메일 중복 검사 후 공용 소셜 가입 폼(/social-join)으로 토스!
       const emailCheckResult = await connection.execute(`SELECT provider FROM users WHERE email = :email`, [email], dbOptions);
       if (emailCheckResult.rows.length > 0) {
         return res.send(`<script>alert("이미 [${emailCheckResult.rows[0].PROVIDER}] 계정으로 등록된 이메일입니다."); location.href="http://localhost:3000/login";</script>`);
@@ -378,8 +457,6 @@ router.get('/naver/callback', async (req, res) => {
       const encodedEmail = encodeURIComponent(email);
       const encodedName = encodeURIComponent(nickname);
       const encodedPic = encodeURIComponent(profileImage);
-      
-      // 구글, 카카오가 쓰던 화면을 그대로 재활용!
       return res.redirect(`http://localhost:3000/social-join?email=${encodedEmail}&name=${encodedName}&provider=NAVER&providerId=${providerId}&profileImage=${encodedPic}`);
     }
 
@@ -391,7 +468,7 @@ router.get('/naver/callback', async (req, res) => {
   }
 });
 
-// 7. 소셜 최종 회원가입
+// 12. 소셜 최종 회원가입
 router.post('/socialRegister', async (req, res) => {
   const { email, nickname, provider, providerId, profileImage, birthDate } = req.body;
   let connection;
@@ -434,9 +511,9 @@ router.post('/socialRegister', async (req, res) => {
   }
 });
 
-// 8. 다날 본인인증 영수증 검증
+// 13. 다날 본인인증 영수증 검증
 router.post('/certifications', async (req, res) => {
-  const { impUid } = req.body; // ✨ 프론트에서 impUid로 통일해서 받음
+  const { impUid } = req.body; 
 
   try {
     const tokenResponse = await axios.post('https://api.iamport.kr/users/getToken', {
@@ -444,7 +521,6 @@ router.post('/certifications', async (req, res) => {
       imp_secret: process.env.PORTONE_API_SECRET
     });
     
-    // 포트원 응답인 access_token을 accessToken으로 변환
     const { access_token: accessToken } = tokenResponse.data.response;
 
     const certResponse = await axios.get(`https://api.iamport.kr/certifications/${impUid}`, {
@@ -469,73 +545,28 @@ router.post('/certifications', async (req, res) => {
 
 // [공용 함수] 로그인 성공 시 히스토리 기록 & 토큰 발급
 async function processLoginSuccess(connection, userId, req) {
-  // 1. 유저의 접속 IP와 브라우저(기기) 정보 빼오기
-  // (프록시 환경을 대비해 x-forwarded-for 도 확인)
   const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'Unknown';
   const userAgent = req.headers['user-agent'] || 'Unknown';
 
-  // 2. login_history 테이블에 기록 남기기 (방금 만드신 컬럼명 그대로!)
   const historySql = `
     INSERT INTO login_history (user_id, ip_address, user_agent, status, created_at)
     VALUES (:userId, :ipAddress, :userAgent, 'SUCCESS', CURRENT_TIMESTAMP)
   `;
   await connection.execute(historySql, { userId, ipAddress, userAgent }, dbOptions);
 
-  // 3. JWT 토큰 2개 찍어내기
-  const accessToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '30m' }); // 30분짜리
-  const refreshToken = jwt.sign({ id: userId }, process.env.JWT_REFRESH_SECRET, { expiresIn: '14d' }); // 14일짜리
+  const accessToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '30m' }); 
+  const refreshToken = jwt.sign({ id: userId }, process.env.JWT_REFRESH_SECRET, { expiresIn: '14d' }); 
 
-  // 4. 리프레시 토큰 만료일(14일 뒤) 계산
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 14);
 
-  // 5. refresh_tokens 테이블에 기록 남기기
   const tokenSql = `
     INSERT INTO refresh_tokens (user_id, refresh_token, expires_at, revoked, created_at)
     VALUES (:userId, :refreshToken, :expiresAt, 'N', CURRENT_TIMESTAMP)
   `;
   await connection.execute(tokenSql, { userId, refreshToken, expiresAt }, dbOptions);
 
-  // 6. 프론트엔드에 돌려줄 토큰 반환
   return { accessToken, refreshToken };
 }
-
-// 9. 로그아웃 (리프레시 토큰 무효화)
-router.post('/logout', async (req, res) => {
-  // 프론트엔드에서 body에 실어 보낸 refreshToken을 받습니다.
-  const { refreshToken } = req.body; 
-  let connection;
-
-  try {
-    // 토큰이 안 넘어왔어도 프론트엔드 스토리지는 비워야 하므로 성공 처리는 해줍니다.
-    if (!refreshToken) {
-      return res.json({ result: true, message: '토큰 없음. 클라이언트 로그아웃 진행.' });
-    }
-
-    connection = await db.getConnection();
-
-    // 핵심 로직: 해당 토큰을 찾아 REVOKED 상태를 'Y'로 변경
-    const updateSql = `
-      UPDATE refresh_tokens 
-      SET revoked = 'Y' 
-      WHERE refresh_token = :refreshToken
-    `;
-    
-    const result = await connection.execute(updateSql, { refreshToken }, dbOptions);
-
-    if (result.rowsAffected > 0) {
-      res.json({ result: true, message: '서버 토큰이 성공적으로 폐기되었습니다.' });
-    } else {
-      res.json({ result: true, message: '이미 폐기되었거나 존재하지 않는 토큰입니다.' });
-    }
-
-  } catch (error) {
-    console.error('로그아웃 처리 중 오류:', error);
-    // 에러가 나더라도 프론트 단의 로그아웃은 진행되어야 하므로 200 상태코드로 보냅니다.
-    res.json({ result: false, message: '서버 로그아웃 처리 실패' }); 
-  } finally {
-    if (connection) await connection.close();
-  }
-});
 
 module.exports = router;

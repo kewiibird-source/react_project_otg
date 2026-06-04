@@ -8,6 +8,7 @@ import Join from './components/Join';
 import Menu from './components/Menu';
 import SocialJoin from './components/SocialJoin';
 import Write from './components/Write';
+import Profile from './components/Profile';
 
 function App() {
   const location = useLocation();
@@ -39,6 +40,8 @@ function App() {
           <Route path="/home" element={<Home />} />
           <Route path="/social-join" element={<SocialJoin />} /> 
           <Route path="/write" element={<Write />} /> 
+          <Route path="/profile" element={<Profile />} /> 
+          <Route path="/profile/:nickname" element={<Profile />} />
         </Routes>
       </Box>
     </Box>

@@ -18,11 +18,14 @@ function Menu() {
   const [isWriteModalOpen, setIsWriteModalOpen] = useState(false);
 
   // ✨ 수정 포인트: '게시글 작성'은 배열에서 뺐습니다. (아래쪽에서 따로 onClick 이벤트를 주어 렌더링하기 위함)
+  const storedUser = JSON.parse(localStorage.getItem('userInfo') || '{}');
+  const myNickname = storedUser.nickname || 'me';
+
   const menuItems = [
     { text: '홈', icon: <Home />, path: '/home' },
     { text: '알림 (준비중)', icon: <Notifications />, path: '/notifications' },
     { text: '보관함 (준비중)', icon: <Bookmark />, path: '/archive' },
-    { text: '프로필', icon: <Person />, path: '/profile' },
+    { text: '프로필', icon: <Person />, path: `/profile/${myNickname}` }, 
   ];
 
   // 로그아웃 관련 로직
