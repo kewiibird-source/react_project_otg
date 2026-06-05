@@ -567,6 +567,154 @@ async function processLoginSuccess(connection, userId, req) {
   await connection.execute(tokenSql, { userId, refreshToken, expiresAt }, dbOptions);
 
   return { accessToken, refreshToken };
-}
+};
+
+// ==============================================================
+// ✨ 14. 특정 유저의 '팔로워' 목록 가져오기 (나를 팔로우하는 사람)
+// ==============================================================
+router.get('/:nickname/followers', jwtAuthentication, async (req, res) => {
+  let connection;
+  try {
+    connection = await db.getConnection();
+    const targetNickname = req.params.nickname;
+    const loginUserId = req.user?.id || req.userId; // 로그인한 유저 ID
+
+    // [OracleDB 최적화 쿼리] 서브쿼리에 EXISTS 사용
+    const query = `
+      SELECT 
+        u.nickname, 
+        u.bio, 
+        u.profile_image,
+        CASE 
+          WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = :loginUserId AND following_id = u.id) 
+          THEN 1 ELSE 0 
+        END AS is_following
+      FROM users u
+      JOIN follows f ON u.id = f.follower_id
+      JOIN users target ON target.id = f.following_id
+      WHERE target.nickname = :targetNickname
+    `;
+    
+    const result = await connection.execute(query, { loginUserId, targetNickname }, dbOptions);
+
+    // Oracle은 기본적으로 키값을 모두 대문자로 반환하므로, 프론트엔드가 쓰기 편하게 소문자/카멜케이스로 변환해서 줍니다.
+    const followers = result.rows.map(row => ({
+      nickname: row.NICKNAME,
+      name: row.BIO || '', 
+      profileImage: row.PROFILE_IMAGE || '',
+      isFollowing: row.IS_FOLLOWING === 1 // 1이면 true, 0이면 false
+    }));
+
+    res.json({ result: true, data: followers });
+  } catch (error) {
+    console.error("🚨 팔로워 목록 로드 에러:", error);
+    res.status(500).json({ result: false, message: "서버 오류가 발생했습니다." });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+
+
+// ==============================================================
+// ✨ 15. 특정 유저의 '팔로잉' 목록 가져오기 (내가 팔로우하는 사람)
+// ==============================================================
+router.get('/:nickname/followings', jwtAuthentication, async (req, res) => {
+  let connection;
+  try {
+    connection = await db.getConnection();
+    const targetNickname = req.params.nickname;
+    const loginUserId = req.user?.id || req.userId;
+
+    const query = `
+      SELECT 
+        u.nickname, 
+        u.bio, 
+        u.profile_image,
+        CASE 
+          WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = :loginUserId AND following_id = u.id) 
+          THEN 1 ELSE 0 
+        END AS is_following
+      FROM users u
+      JOIN follows f ON u.id = f.following_id
+      JOIN users target ON target.id = f.follower_id
+      WHERE target.nickname = :targetNickname
+    `;
+
+    const result = await connection.execute(query, { loginUserId, targetNickname }, dbOptions);
+
+    const followings = result.rows.map(row => ({
+      nickname: row.NICKNAME,
+      name: row.BIO || '',
+      profileImage: row.PROFILE_IMAGE || '',
+      isFollowing: row.IS_FOLLOWING === 1 
+    }));
+
+    res.json({ result: true, data: followings });
+  } catch (error) {
+    console.error("🚨 팔로잉 목록 로드 에러:", error);
+    res.status(500).json({ result: false, message: "서버 오류가 발생했습니다." });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+
+// ==============================================================
+// ✨ 16. 팔로우 / 언팔로우 토글 API
+// ==============================================================
+router.post('/:nickname/follow', jwtAuthentication, async (req, res) => {
+  let connection;
+  try {
+    connection = await db.getConnection();
+    const targetNickname = req.params.nickname;
+    const loginUserId = req.user?.id || req.userId;
+
+    // 1. 팔로우할 대상(타겟)의 ID 찾기
+    const targetResult = await connection.execute(
+      `SELECT id FROM users WHERE nickname = :targetNickname`,
+      { targetNickname },
+      dbOptions
+    );
+
+    if (targetResult.rows.length === 0) {
+      return res.json({ result: false, message: "존재하지 않는 사용자입니다." });
+    }
+    const targetUserId = targetResult.rows[0].ID;
+
+    if (loginUserId === targetUserId) {
+       return res.json({ result: false, message: "자기 자신을 팔로우할 수 없습니다." });
+    }
+
+    // 2. 현재 내가 이 사람을 팔로우 중인지 확인
+    const followCheck = await connection.execute(
+      `SELECT 1 FROM follows WHERE follower_id = :loginUserId AND following_id = :targetUserId`,
+      { loginUserId, targetUserId },
+      dbOptions
+    );
+
+    if (followCheck.rows.length > 0) {
+      // 3-A. 이미 팔로우 중이면 -> 언팔로우 (데이터 삭제)
+      await connection.execute(
+        `DELETE FROM follows WHERE follower_id = :loginUserId AND following_id = :targetUserId`,
+        { loginUserId, targetUserId },
+        { autoCommit: true }
+      );
+      res.json({ result: true, message: "팔로우를 취소했습니다.", isFollowing: false });
+    } else {
+      // 3-B. 팔로우 중이 아니면 -> 팔로우 (데이터 추가)
+      await connection.execute(
+        `INSERT INTO follows (follower_id, following_id) VALUES (:loginUserId, :targetUserId)`,
+        { loginUserId, targetUserId },
+        { autoCommit: true }
+      );
+      res.json({ result: true, message: "팔로우했습니다.", isFollowing: true });
+    }
+
+  } catch (error) {
+    console.error("🚨 팔로우 토글 에러:", error);
+    res.status(500).json({ result: false, message: "서버 오류가 발생했습니다." });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
 
 module.exports = router;

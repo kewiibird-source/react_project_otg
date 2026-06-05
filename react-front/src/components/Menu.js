@@ -4,7 +4,6 @@ import {
   ListItemText, Typography, Toolbar, Divider,
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button 
 } from '@mui/material';
-// ✨ EditIcon 에러를 방지하기 위해 사용하시려던 Edit 아이콘이나, 기존의 Create 아이콘을 유지했습니다.
 import { Home, Create, Person, Notifications, Bookmark, Logout } from '@mui/icons-material';
 import { Link, useNavigate } from 'react-router-dom';
 import Write from './Write';
@@ -16,17 +15,9 @@ function Menu() {
   const [openDialog, setOpenDialog] = useState(false);
   // 2. 글쓰기 모달
   const [isWriteModalOpen, setIsWriteModalOpen] = useState(false);
-
-  // ✨ 수정 포인트: '게시글 작성'은 배열에서 뺐습니다. (아래쪽에서 따로 onClick 이벤트를 주어 렌더링하기 위함)
+  
   const storedUser = JSON.parse(localStorage.getItem('userInfo') || '{}');
   const myNickname = storedUser.nickname || 'me';
-
-  const menuItems = [
-    { text: '홈', icon: <Home />, path: '/home' },
-    { text: '알림 (준비중)', icon: <Notifications />, path: '/notifications' },
-    { text: '보관함 (준비중)', icon: <Bookmark />, path: '/archive' },
-    { text: '프로필', icon: <Person />, path: `/profile/${myNickname}` }, 
-  ];
 
   // 로그아웃 관련 로직
   const handleLogoutClick = () => setOpenDialog(true);
@@ -53,6 +44,12 @@ function Menu() {
     navigate('/login', { replace: true }); 
   };
 
+  // ✨ 보관함 클릭 로직
+  const handleBookmarkMenuClick = () => {
+    // 프로필 페이지로 이동하면서 state로 탭 정보를 넘겨줍니다.
+    navigate(`/profile/${myNickname}`, { state: { defaultTab: 1 } });
+  }
+
   return (
     <>
       <Drawer
@@ -74,8 +71,9 @@ function Menu() {
         </Toolbar>
         <Divider />
         
+        {/* ✨ 리팩토링된 메뉴 리스트: map 반복문을 풀고 명시적으로 분리하여 가독성과 유지보수성 확보 */}
         <List>
-          {/* 1. 홈 메뉴 (따로 분리) */}
+          {/* 1. 홈 */}
           <ListItem disablePadding>
             <ListItemButton component={Link} to="/home">
               <ListItemIcon sx={{ color: '#555' }}><Home /></ListItemIcon>
@@ -83,7 +81,7 @@ function Menu() {
             </ListItemButton>
           </ListItem>
 
-          {/* ✨ 2. 게시글 작성 메뉴 (페이지 이동 대신 모달 띄우기) */}
+          {/* 2. 새 게시물 */}
           <ListItem disablePadding>
             <ListItemButton onClick={() => setIsWriteModalOpen(true)}>
               <ListItemIcon sx={{ color: '#555' }}><Create /></ListItemIcon>
@@ -91,15 +89,29 @@ function Menu() {
             </ListItemButton>
           </ListItem>
 
-          {/* 3. 나머지 메뉴들 반복 렌더링 (알림, 보관함, 프로필) */}
-          {menuItems.slice(1).map((item) => (
-            <ListItem key={item.text} disablePadding>
-              <ListItemButton component={Link} to={item.path}>
-                <ListItemIcon sx={{ color: '#555' }}>{item.icon}</ListItemIcon>
-                <ListItemText primary={item.text} />
-              </ListItemButton>
-            </ListItem>
-          ))}
+          {/* 3. 알림 */}
+          <ListItem disablePadding>
+            <ListItemButton component={Link} to="/notifications">
+              <ListItemIcon sx={{ color: '#555' }}><Notifications /></ListItemIcon>
+              <ListItemText primary="알림 (준비중)" />
+            </ListItemButton>
+          </ListItem>
+
+          {/* ✨ 4. 보관함: 커스텀 함수(handleBookmarkMenuClick) 연결 */}
+          <ListItem disablePadding>
+            <ListItemButton onClick={handleBookmarkMenuClick}>
+              <ListItemIcon sx={{ color: '#555' }}><Bookmark /></ListItemIcon>
+              <ListItemText primary="보관함" />
+            </ListItemButton>
+          </ListItem>
+
+          {/* 5. 프로필 */}
+          <ListItem disablePadding>
+            <ListItemButton component={Link} to={`/profile/${myNickname}`}>
+              <ListItemIcon sx={{ color: '#555' }}><Person /></ListItemIcon>
+              <ListItemText primary="프로필" />
+            </ListItemButton>
+          </ListItem>
         </List>
         
         <Divider sx={{ my: 1 }} />
@@ -126,7 +138,7 @@ function Menu() {
         </DialogActions>
       </Dialog>
 
-      {/* ✨ 게시글 작성 모달 */}
+      {/* 게시글 작성 모달 */}
       <Write open={isWriteModalOpen} onClose={() => setIsWriteModalOpen(false)} />
     </>
   );

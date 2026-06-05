@@ -124,7 +124,7 @@ router.get('/my', jwtAuthentication, async (req, res) => {
     } finally { if (connection) await connection.close(); }
 });
 
-// ✨ 3. 전체 피드 조회 (authorProfileImage 추가)
+// routes/posts.js 의 3. 전체 피드 조회 API
 router.get('/', jwtAuthentication, async (req, res) => {
     let connection;
     try {
@@ -133,7 +133,8 @@ router.get('/', jwtAuthentication, async (req, res) => {
 
         const sql = `
             SELECT 
-                P.ID AS "id", U.NICKNAME AS "authorName", U.PROFILE_IMAGE AS "authorProfileImage", P.TITLE AS "title", P.CONTENT AS "content",
+                P.ID AS "id", U.NICKNAME AS "authorName", U.PROFILE_IMAGE AS "authorProfileImage", 
+                P.TITLE AS "title", P.CONTENT AS "content",
                 (SELECT LISTAGG(PI.IMAGE_URL, '|') WITHIN GROUP (ORDER BY PI.SORT_ORDER) FROM POST_IMAGES PI WHERE PI.POST_ID = P.ID) AS "imageUrls",
                 P.CATEGORY AS "category", TO_CHAR(P.CREATED_AT, 'YYYY-MM-DD HH24:MI') AS "createdAt",
                 (SELECT LISTAGG(H.NAME, ',') WITHIN GROUP (ORDER BY H.NAME) FROM POST_HASHTAGS PH JOIN HASHTAGS H ON PH.HASHTAG_ID = H.ID WHERE PH.POST_ID = P.ID) AS "hashtags",
@@ -141,7 +142,8 @@ router.get('/', jwtAuthentication, async (req, res) => {
                 NVL((SELECT COUNT(*) FROM LIKES WHERE POST_ID = P.ID), 0) AS "likeCount",
                 NVL((SELECT COUNT(*) FROM LIKES WHERE POST_ID = P.ID AND USER_ID = :userId), 0) AS "isLiked",
                 NVL((SELECT COUNT(*) FROM COMMENTS C WHERE C.POST_ID = P.ID AND C.STATUS = 'PUBLISHED'), 0) AS "commentCount",
-                NVL((SELECT COUNT(*) FROM POSTS RP WHERE RP.PARENT_POST_ID = P.ID), 0) AS "quoteCount"
+                NVL((SELECT COUNT(*) FROM POSTS RP WHERE RP.PARENT_POST_ID = P.ID), 0) AS "quoteCount",
+                (SELECT COUNT(*) FROM SCRAPS WHERE POST_ID = P.ID AND USER_ID = :userId) AS "isScrapped"
             FROM POSTS P
             JOIN USERS U ON P.USER_ID = U.ID
             LEFT JOIN POSTS PP ON P.PARENT_POST_ID = PP.ID
@@ -151,9 +153,20 @@ router.get('/', jwtAuthentication, async (req, res) => {
         const result = await connection.execute(sql, { userId }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
         
         const cleanPosts = result.rows.map(row => ({
-            id: row.id, authorName: row.authorName, authorProfileImage: row.authorProfileImage || '', title: row.title, content: row.content,
-            images: row.imageUrls ? row.imageUrls.split('|') : [], category: row.category, createdAt: row.createdAt, hashtags: row.hashtags ? row.hashtags.split(',') : [],
-            likeCount: row.likeCount, isLiked: row.isLiked > 0, commentCount: row.commentCount, quoteCount: row.quoteCount, 
+            id: row.id, 
+            authorName: row.authorName, 
+            authorProfileImage: row.authorProfileImage || '', 
+            title: row.title, 
+            content: row.content,
+            images: row.imageUrls ? row.imageUrls.split('|') : [], 
+            category: row.category, 
+            createdAt: row.createdAt, 
+            hashtags: row.hashtags ? row.hashtags.split(',') : [],
+            likeCount: row.likeCount, 
+            isLiked: row.isLiked > 0, 
+            commentCount: row.commentCount, 
+            quoteCount: row.quoteCount, 
+            isScrapped: row.isScrapped > 0, // ✨ row.isScrapped 결과가 1 이상이면 true
             parentPost: row.parentPostId ? { id: row.parentPostId, title: row.parentTitle, content: row.parentContent, imageUrl: row.parentImageUrl, authorName: row.parentAuthorName } : null
         }));
         res.json({ result: true, posts: cleanPosts });
@@ -215,6 +228,45 @@ router.put('/comments/:commentId', jwtAuthentication, async (req, res) => {
         else res.json({ result: false, message: '권한이 없습니다.' });
     } catch (error) { console.error('\n🚨 [PUT /comments] 에러:\n', error); res.status(500).json({ result: false }); } 
     finally { if (connection) await connection.close(); }
+});
+
+// ✨ 6.5 댓글 삭제 (Soft Delete 적용)
+router.delete('/comments/:commentId', jwtAuthentication, async (req, res) => {
+    let connection;
+    try {
+        connection = await db.getConnection();
+        const userId = req.user?.id || req.userId;
+        const commentId = req.params.commentId;
+        
+        // 왜(Why)?: DELETE 문 대신 UPDATE 문을 사용하여 'STATUS'만 변경합니다.
+        // 이렇게 하면 대댓글이 참조하는 부모 ID(FK 제약조건) 오류를 방지하고, 
+        // 향후 운영 단계에서 악성 유저의 데이터 복구 및 증거 보존이 가능합니다.
+        const sql = `
+            UPDATE COMMENTS 
+            SET STATUS = 'DELETED', UPDATED_AT = CURRENT_TIMESTAMP 
+            WHERE ID = :commentId AND USER_ID = :userId
+        `;
+        
+        const result = await connection.execute(
+            sql, 
+            { commentId, userId }, 
+            { autoCommit: true }
+        );
+
+        // 왜(Why)?: 조건(ID와 USER_ID)에 맞는 데이터가 없으면 변경된 행(rowsAffected)이 0입니다.
+        // 이는 존재하지 않는 댓글이거나, 다른 유저의 댓글을 삭제하려는 시도(보안 위협)를 의미합니다.
+        if (result.rowsAffected > 0) {
+            res.json({ result: true, message: '댓글이 성공적으로 삭제되었습니다.' });
+        } else {
+            // 403 Forbidden: 인증은 되었으나 해당 리소스에 대한 권한이 없음
+            res.status(403).json({ result: false, message: '삭제 권한이 없거나 존재하지 않는 댓글입니다.' });
+        }
+    } catch (error) { 
+        console.error('\n🚨 [DELETE /comments/:commentId] 에러:\n', error); 
+        res.status(500).json({ result: false, message: '서버 오류가 발생했습니다.' }); 
+    } finally { 
+        if (connection) await connection.close(); 
+    }
 });
 
 // ✨ 7. 댓글 조회 (authorProfileImage 추가)
@@ -289,30 +341,124 @@ router.get('/user/:nickname', jwtAuthentication, async (req, res) => {
     } finally { if (connection) await connection.close(); }
 });
 
-// 9. 팔로우 / 언팔로우 토글 API
-router.post('/user/:nickname/follow', jwtAuthentication, async (req, res) => {
+// ✨ 수정 후: '/user/:nickname/:type' 
+router.get('/user/:nickname/:type', jwtAuthentication, async (req, res) => {
+    let connection;
+    try {
+        const { nickname, type } = req.params;
+
+        // 1. 여기서 타입을 직접 검증합니다. (더 확실하고 안전함)
+        if (type !== 'followers' && type !== 'following') {
+            return res.status(400).json({ result: false, message: '잘못된 접근입니다.' });
+        }
+
+        connection = await db.getConnection();
+        const myId = req.user?.id || req.userId;
+
+        const userCheck = await connection.execute(`SELECT ID FROM USERS WHERE NICKNAME = :nickname`, { nickname });
+        if (userCheck.rows.length === 0) return res.status(404).json({ result: false, message: '유저를 찾을 수 없습니다.' });
+        const targetId = userCheck.rows[0].ID;
+
+        // 2. 검증이 끝난 후 안전하게 SQL 실행
+        const sql = type === 'followers' 
+            ? `SELECT U.ID, U.NICKNAME, U.PROFILE_IMAGE, 
+                      (SELECT COUNT(*) FROM FOLLOWS WHERE FOLLOWER_ID = :myId AND FOLLOWING_ID = U.ID) AS IS_FOLLOWING
+               FROM FOLLOWS F JOIN USERS U ON F.FOLLOWER_ID = U.ID WHERE F.FOLLOWING_ID = :targetId`
+            : `SELECT U.ID, U.NICKNAME, U.PROFILE_IMAGE, 
+                      1 AS IS_FOLLOWING
+               FROM FOLLOWS F JOIN USERS U ON F.FOLLOWING_ID = U.ID WHERE F.FOLLOWER_ID = :targetId`;
+            
+        const result = await connection.execute(sql, { myId, targetId }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+        res.json({ result: true, list: result.rows });
+    } catch (error) { 
+        console.error('\n🚨 [GET /user/:nickname/:type] 에러:\n', error); 
+        res.status(500).json({ result: false }); 
+    } finally { 
+        if (connection) await connection.close(); 
+    }
+});
+
+// ✨ 1. 스크랩(보관함) 토글 API
+// 왜(Why)?: 이미 생성된 SCRAPS 테이블을 활용하여 넣고 빼는 로직입니다.
+router.post('/:id/scrap', jwtAuthentication, async (req, res) => {
     let connection;
     try {
         connection = await db.getConnection();
-        const followerId = req.user?.id || req.userId;
-        const targetNickname = req.params.nickname;
+        const userId = req.user?.id || req.userId;
+        const postId = req.params.id;
 
-        const userCheck = await connection.execute(`SELECT ID FROM USERS WHERE NICKNAME = :nickname`, { nickname: targetNickname }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
-        if (userCheck.rows.length === 0) return res.status(404).json({ result: false, message: '유저를 찾을 수 없습니다.' });
-        
-        const followingId = userCheck.rows[0].ID;
-        if (followerId === followingId) return res.json({ result: false, message: '자신을 팔로우할 수 없습니다.' });
+        const checkResult = await connection.execute(
+            `SELECT ID FROM SCRAPS WHERE USER_ID = :userId AND POST_ID = :postId`, 
+            { userId, postId }
+        );
 
-        const checkFollow = await connection.execute(`SELECT ID FROM FOLLOWS WHERE FOLLOWER_ID = :followerId AND FOLLOWING_ID = :followingId`, { followerId, followingId });
-        if (checkFollow.rows.length > 0) {
-            await connection.execute(`DELETE FROM FOLLOWS WHERE FOLLOWER_ID = :followerId AND FOLLOWING_ID = :followingId`, { followerId, followingId }, { autoCommit: true });
-            res.json({ result: true, isFollowing: false }); 
+        if (checkResult.rows.length > 0) {
+            await connection.execute(`DELETE FROM SCRAPS WHERE USER_ID = :userId AND POST_ID = :postId`, { userId, postId }, { autoCommit: true });
+            res.json({ result: true, message: 'unscrapped', isScrapped: false });
         } else {
-            await connection.execute(`INSERT INTO FOLLOWS (FOLLOWER_ID, FOLLOWING_ID) VALUES (:followerId, :followingId)`, { followerId, followingId }, { autoCommit: true });
-            res.json({ result: true, isFollowing: true }); 
+            await connection.execute(`INSERT INTO SCRAPS (USER_ID, POST_ID) VALUES (:userId, :postId)`, { userId, postId }, { autoCommit: true });
+            res.json({ result: true, message: 'scrapped', isScrapped: true });
         }
-    } catch (error) { console.error('\n🚨 [POST /follow] 에러:\n', error); res.status(500).json({ result: false }); 
-    } finally { if (connection) await connection.close(); }
+    } catch (error) { 
+        console.error('\n🚨 [POST /scrap] 에러:\n', error); 
+        res.status(500).json({ result: false }); 
+    } finally { 
+        if (connection) await connection.close(); 
+    }
+});
+
+// ✨ 2. 내 스크랩 목록 조회 API (모달 연동 및 다중 검색용)
+router.get('/scraps/my', jwtAuthentication, async (req, res) => {
+    let connection;
+    try {
+        connection = await db.getConnection();
+        const userId = req.user?.id || req.userId;
+
+        // 왜(Why)?: 모달을 띄우려면 본문 내용, 해시태그, 좋아요 수 등 전체 정보가 필요합니다.
+        // SCRAPS 테이블과 JOIN하되, 메인 피드와 동일한 컬럼들을 Select 합니다.
+        const sql = `
+            SELECT 
+                P.ID AS "id", U.NICKNAME AS "authorName", U.PROFILE_IMAGE AS "authorProfileImage", 
+                P.TITLE AS "title", P.CONTENT AS "content",
+                (SELECT LISTAGG(PI.IMAGE_URL, '|') WITHIN GROUP (ORDER BY PI.SORT_ORDER) FROM POST_IMAGES PI WHERE PI.POST_ID = P.ID) AS "imageUrls",
+                P.CATEGORY AS "category", TO_CHAR(P.CREATED_AT, 'YYYY-MM-DD HH24:MI') AS "createdAt",
+                (SELECT LISTAGG(H.NAME, ',') WITHIN GROUP (ORDER BY H.NAME) FROM POST_HASHTAGS PH JOIN HASHTAGS H ON PH.HASHTAG_ID = H.ID WHERE PH.POST_ID = P.ID) AS "hashtags",
+                P.PARENT_POST_ID AS "parentPostId", PP.TITLE AS "parentTitle", PP.CONTENT AS "parentContent", PP.THUMBNAIL_URL AS "parentImageUrl", PU.NICKNAME AS "parentAuthorName",
+                NVL((SELECT COUNT(*) FROM LIKES WHERE POST_ID = P.ID), 0) AS "likeCount",
+                NVL((SELECT COUNT(*) FROM LIKES WHERE POST_ID = P.ID AND USER_ID = :userId), 0) AS "isLiked",
+                NVL((SELECT COUNT(*) FROM COMMENTS C WHERE C.POST_ID = P.ID AND C.STATUS = 'PUBLISHED'), 0) AS "commentCount",
+                NVL((SELECT COUNT(*) FROM POSTS RP WHERE RP.PARENT_POST_ID = P.ID), 0) AS "quoteCount",
+                1 AS "isScrapped" -- 스크랩 탭이므로 무조건 1(true) 반환
+            FROM POSTS P
+            JOIN USERS U ON P.USER_ID = U.ID
+            JOIN SCRAPS S ON P.ID = S.POST_ID
+            LEFT JOIN POSTS PP ON P.PARENT_POST_ID = PP.ID
+            LEFT JOIN USERS PU ON PP.USER_ID = PU.ID
+            WHERE S.USER_ID = :userId
+            ORDER BY S.CREATED_AT DESC
+        `;
+        const result = await connection.execute(sql, { userId }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+        
+        // 프론트엔드 모달이 요구하는 객체 구조로 파싱
+        const fullScraps = result.rows.map(row => ({
+            id: row.id, authorName: row.authorName, authorProfileImage: row.authorProfileImage || '', 
+            title: row.title, content: row.content,
+            thumbnail: row.imageUrls ? row.imageUrls.split('|')[0] : '', 
+            images: row.imageUrls ? row.imageUrls.split('|') : [],       
+            category: row.category, createdAt: row.createdAt, 
+            hashtags: row.hashtags ? row.hashtags.split(',') : [],
+            likeCount: row.likeCount, isLiked: row.isLiked > 0, 
+            commentCount: row.commentCount, quoteCount: row.quoteCount, isScrapped: true,
+            parentPost: row.parentPostId ? { id: row.parentPostId, title: row.parentTitle, content: row.parentContent, imageUrl: row.parentImageUrl, authorName: row.parentAuthorName } : null
+        }));
+
+        res.json({ result: true, scraps: fullScraps });
+    } catch (error) { 
+        console.error('\n🚨 [GET /scraps/my] 에러:\n', error); 
+        res.status(500).json({ result: false }); 
+    } finally { 
+        if (connection) await connection.close(); 
+    }
 });
 
 module.exports = router;

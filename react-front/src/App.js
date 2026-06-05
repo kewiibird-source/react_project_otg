@@ -16,7 +16,8 @@ function App() {
   const isAuthPage = 
     location.pathname === '/login' || 
     location.pathname === '/join' || 
-    location.pathname === '/social-join'; 
+    location.pathname === '/social-join' ||
+    location.pathname === '/';
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
@@ -30,6 +31,7 @@ function App() {
         component={isAuthPage ? 'div' : 'main'} 
         sx={{ 
           flexGrow: 1, 
+          minWidth: 0, 
           p: isAuthPage ? 0 : 3 
         }}
       >
