@@ -7,6 +7,8 @@ import {
 import { Home, Create, Person, Notifications, Bookmark, Logout } from '@mui/icons-material';
 import { Link, useNavigate } from 'react-router-dom';
 import Write from './Write';
+import { Box } from '@mui/material';
+import logoImage from '../assets/OverTheGlass.svg';
 
 function Menu() {
   const navigate = useNavigate();
@@ -50,6 +52,36 @@ function Menu() {
     navigate(`/profile/${myNickname}`, { state: { defaultTab: 1 } });
   }
 
+  // 🎨 1. 공통 메뉴 스타일 변수 선언 
+  const menuItemStyle = {
+    position: 'relative',
+    transition: 'all 0.3s ease',
+    '&::before': {
+      content: '""',
+      position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
+      width: '4px', height: '0%', backgroundColor: '#1976d2', // 파란색 포인트 라인
+      transition: 'height 0.3s ease', borderRadius: '0 4px 4px 0',
+    },
+    '&:hover': {
+      backgroundColor: '#f5f5f5',
+      '&::before': { height: '60%' },
+      '& .MuiListItemIcon-root': { color: '#1976d2', transition: 'color 0.3s' },
+      '& .MuiListItemText-root span': { color: '#1976d2', fontWeight: 'bold', transition: 'color 0.3s' }
+    }
+  };
+
+  // 🎨 2. 로그아웃 전용 스타일 (빨간색)
+  const logoutItemStyle = {
+    ...menuItemStyle, // 기본 스타일은 그대로 가져오고
+    '&::before': { ...menuItemStyle['&::before'], backgroundColor: '#d32f2f' }, // 라인만 빨간색
+    '&:hover': {
+      backgroundColor: '#fff0f0', // 마우스 올렸을 때 연한 빨간 배경
+      '&::before': { height: '60%' },
+      '& .MuiListItemIcon-root': { color: '#d32f2f', transition: 'color 0.3s' },
+      '& .MuiListItemText-root span': { color: '#d32f2f', fontWeight: 'bold', transition: 'color 0.3s' }
+    }
+  };
+
   return (
     <>
       <Drawer
@@ -60,83 +92,91 @@ function Menu() {
           '& .MuiDrawer-paper': {
             width: 240,
             boxSizing: 'border-box',
-            backgroundColor: '#f8f9fa', 
+            backgroundColor: '#ffffff', // 배경을 흰색으로 변경 (더 깔끔함)
+            borderRight: 'none',
+            boxShadow: '2px 0 10px rgba(0,0,0,0.05)', // 우측 은은한 그림자
           },
         }}
       >
-        <Toolbar>
-          <Typography variant="h6" component="div" sx={{ fontWeight: 'bold', color: '#333' }}>
-            잔너머
-          </Typography>
+        <Toolbar sx={{ padding: '20px 24px', justifyContent: 'flex-start' }}>
+          <Box
+            component="img"
+            src={logoImage}
+            alt="OverTheGlass 로고"
+            onClick={() => navigate('/home')}
+            sx={{
+              width: 130, 
+              height: 'auto',
+              objectFit: 'contain',
+              cursor: 'pointer',
+              
+              // transform 속성에 통통 튀는 텐션을 줍니다.
+              transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)', 
+              
+              '&:hover': {
+                transform: 'scale(1.08)', // 마우스를 올리면 8% 정도 앞으로 뿅 커짐
+              },
+              '&:active': {
+                transform: 'scale(0.95)', // 클릭하는 순간 살짝 눌리는 디테일 추가!
+              }
+            }}
+          />
         </Toolbar>
-        <Divider />
         
-        {/* ✨ 리팩토링된 메뉴 리스트: map 반복문을 풀고 명시적으로 분리하여 가독성과 유지보수성 확보 */}
-        <List>
+        {/* ✨ 스타일이 적용된 메뉴 리스트 시작 */}
+        <List sx={{ px: 1 }}> {/* px: 1 을 줘서 메뉴가 벽에 너무 딱 붙지 않게 여백 추가 */}
+          
           {/* 1. 홈 */}
-          <ListItem disablePadding>
-            <ListItemButton component={Link} to="/home">
+          <ListItem disablePadding sx={{ mb: 0.5 }}>
+            <ListItemButton component={Link} to="/home" sx={{ ...menuItemStyle, borderRadius: '8px' }}>
               <ListItemIcon sx={{ color: '#555' }}><Home /></ListItemIcon>
               <ListItemText primary="홈" />
             </ListItemButton>
           </ListItem>
 
           {/* 2. 새 게시물 */}
-          <ListItem disablePadding>
-            <ListItemButton onClick={() => setIsWriteModalOpen(true)}>
+          <ListItem disablePadding sx={{ mb: 0.5 }}>
+            <ListItemButton onClick={() => setIsWriteModalOpen(true)} sx={{ ...menuItemStyle, borderRadius: '8px' }}>
               <ListItemIcon sx={{ color: '#555' }}><Create /></ListItemIcon>
               <ListItemText primary="새 게시물" />
             </ListItemButton>
           </ListItem>
 
           {/* 3. 알림 */}
-          <ListItem disablePadding>
-            <ListItemButton component={Link} to="/notifications">
+          <ListItem disablePadding sx={{ mb: 0.5 }}>
+            <ListItemButton component={Link} to="/notifications" sx={{ ...menuItemStyle, borderRadius: '8px' }}>
               <ListItemIcon sx={{ color: '#555' }}><Notifications /></ListItemIcon>
               <ListItemText primary="알림 (준비중)" />
             </ListItemButton>
           </ListItem>
 
-          {/* ✨ 4. 보관함: 커스텀 함수(handleBookmarkMenuClick) 연결 */}
-          <ListItem disablePadding>
-            <ListItemButton onClick={handleBookmarkMenuClick}>
+          {/* 4. 보관함 */}
+          <ListItem disablePadding sx={{ mb: 0.5 }}>
+            <ListItemButton onClick={handleBookmarkMenuClick} sx={{ ...menuItemStyle, borderRadius: '8px' }}>
               <ListItemIcon sx={{ color: '#555' }}><Bookmark /></ListItemIcon>
               <ListItemText primary="보관함" />
             </ListItemButton>
           </ListItem>
 
           {/* 5. 프로필 */}
-          <ListItem disablePadding>
-            <ListItemButton component={Link} to={`/profile/${myNickname}`}>
+          <ListItem disablePadding sx={{ mb: 0.5 }}>
+            <ListItemButton component={Link} to={`/profile/${myNickname}`} sx={{ ...menuItemStyle, borderRadius: '8px' }}>
               <ListItemIcon sx={{ color: '#555' }}><Person /></ListItemIcon>
               <ListItemText primary="프로필" />
             </ListItemButton>
           </ListItem>
         </List>
         
-        <Divider sx={{ my: 1 }} />
-        
-        <List>
+        {/* 로그아웃 */}
+        <List sx={{ px: 1 }}>
           <ListItem disablePadding>
-            <ListItemButton onClick={handleLogoutClick}>
+            <ListItemButton onClick={handleLogoutClick} sx={{ ...logoutItemStyle, borderRadius: '8px' }}>
               <ListItemIcon sx={{ color: '#d32f2f' }}><Logout /></ListItemIcon>
               <ListItemText primary="로그아웃" sx={{ color: '#d32f2f' }} />
             </ListItemButton>
           </ListItem>
         </List>
       </Drawer>
-
-      {/* 로그아웃 확인 모달 */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} >
-        <DialogTitle sx={{ fontWeight: 'bold' }}>로그아웃 하시겠습니까?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>다음에 또 방문해주세요!</DialogContentText>
-        </DialogContent>
-        <DialogActions sx={{ pb: 2, pr: 2 }}>
-          <Button onClick={handleCloseDialog} color="inherit" sx={{ fontWeight: 'bold' }}>취소</Button>
-          <Button onClick={handleConfirmLogout} color="error" variant="contained" autoFocus>로그아웃</Button>
-        </DialogActions>
-      </Dialog>
 
       {/* 게시글 작성 모달 */}
       <Write open={isWriteModalOpen} onClose={() => setIsWriteModalOpen(false)} />
