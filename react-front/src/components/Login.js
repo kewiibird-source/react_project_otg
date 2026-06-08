@@ -125,12 +125,12 @@ function Login() {
               onChange={(e) => setPassword(e.target.value)} 
             />
             <Button type="submit" variant="contained" color="primary" size="large">
-              Sign in
+              로그인
             </Button>
           </Stack>
         </form>
 
-        <Divider sx={{ my: 3 }}>or continue with</Divider>
+        <Divider sx={{ my: 3 }}>소셜 로그인</Divider>
 
         {/* 원형 소셜 로그인 버튼 스택 */}
         <Stack direction="row" spacing={3} justifyContent="center" sx={{ mb: 1 }}>
@@ -142,9 +142,9 @@ function Login() {
         {/* 하단 회원가입 링크 이동 박스 */}
         <Box sx={{ mt: 3, textAlign: 'center' }}>
           <Typography variant="body2" color="text.secondary">
-            Don't have an account?{' '}
+            계정이 없으신가요?{' '}
             <Link href="/join" underline="hover">
-              Sign up
+              회원가입
             </Link>
           </Typography>
         </Box>

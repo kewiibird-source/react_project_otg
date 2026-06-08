@@ -292,18 +292,18 @@ function Join() {
             )}
             <TextField label="Confirm Password" type="password" variant="outlined" fullWidth size="small" value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} />
             
-            <Button type="submit" variant="contained" color="primary" size="large" sx={{ mt: 2 }}>Sign up</Button>
+            <Button type="submit" variant="contained" color="primary" size="large" sx={{ mt: 2 }}>회원가입</Button>
           </Stack>
         </form>
 
-        <Divider sx={{ my: 3 }}>or sign up with</Divider>
+        <Divider sx={{ my: 3 }}>소셜 아이디로 가입하기</Divider>
         <Stack direction="row" spacing={3} justifyContent="center" sx={{ mb: 1 }}>
           <Button onClick={handleGoogleLogin} sx={{ width: 46, height: 46, borderRadius: '50%', minWidth: 0, backgroundColor: '#ffffff', border: '1px solid #e0e0e0', color: '#757575', fontWeight: 'bold', fontSize: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', '&:hover': { backgroundColor: '#f5f5f5', border: '1px solid #ccc' } }}>G</Button>
           <Button onClick={handleNaverLogin} sx={{ width: 46, height: 46, borderRadius: '50%', minWidth: 0, backgroundColor: '#03C75A', color: '#ffffff', fontWeight: 'bold', fontSize: '16px', '&:hover': { backgroundColor: '#02b34f' } }}>N</Button>
           <Button onClick={handleKakaoLogin} sx={{ width: 46, height: 46, borderRadius: '50%', minWidth: 0, backgroundColor: '#FEE500', color: '#191919', fontWeight: 'bold', fontSize: '16px', '&:hover': { backgroundColor: '#fada00' } }}>K</Button>
         </Stack>
         <Box sx={{ mt: 3, textAlign: 'center' }}>
-          <Typography variant="body2" color="text.secondary">Already have an account? <Link href="/login" underline="hover">Sign in</Link></Typography>
+          <Typography variant="body2" color="text.secondary">이미 회원이신가요?<Link href="/login" underline="hover">로그인</Link></Typography>
         </Box>
       </Paper>
     </Box>

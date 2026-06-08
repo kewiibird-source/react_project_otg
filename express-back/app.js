@@ -7,10 +7,15 @@ const oracledb = require('oracledb');
 const sampleRouter = require("./routes/user");
 const userRouter = require("./routes/user");
 const postsRouter = require("./routes/posts");
+const notificationRouter = require("./routes/notifications");
 
 const db = require("./db");
 
 const app = express();
+app.use((req, res, next) => {
+    console.log(`[LOG] ${req.method} ${req.url}`);
+    next();
+});
 app.use(cors());
 app.use(express.json())
 
@@ -22,6 +27,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use("/sample", sampleRouter);
 app.use("/user", userRouter); // http://localhost:3010/user/...
 app.use("/api/posts", postsRouter);
+app.use('/api/notifications', notificationRouter);
 
 async function startServer() {
   try {

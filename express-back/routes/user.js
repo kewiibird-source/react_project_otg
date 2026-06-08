@@ -717,4 +717,75 @@ router.post('/:nickname/follow', jwtAuthentication, async (req, res) => {
   }
 });
 
+// 계정정보수정
+router.put('/settings', jwtAuthentication, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;  // email 제거
+  const userId = req.user?.id || req.userId;
+  let connection;
+  try {
+    connection = await db.getConnection();
+
+    if (!currentPassword || !newPassword) 
+      return res.json({ result: false, message: '현재 비밀번호와 새 비밀번호를 모두 입력해주세요.' });
+
+    const userResult = await connection.execute(
+      `SELECT PASSWORD FROM USERS WHERE ID = :userId`,
+      { userId }, { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    if (userResult.rows.length === 0) 
+      return res.status(404).json({ result: false, message: '유저를 찾을 수 없습니다.' });
+
+    const isMatch = await bcrypt.compare(currentPassword, userResult.rows[0].PASSWORD);
+    if (!isMatch) 
+      return res.json({ result: false, message: '현재 비밀번호가 틀렸습니다.' });
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await connection.execute(
+      `UPDATE USERS SET PASSWORD = :password, UPDATED_AT = CURRENT_TIMESTAMP WHERE ID = :userId`,
+      { password: hashed, userId }, { autoCommit: true }
+    );
+    res.json({ result: true, message: '비밀번호가 변경되었습니다.' });
+  } catch (e) {
+    console.error('비밀번호 변경 에러:', e);
+    res.status(500).json({ result: false });
+  } finally { if (connection) await connection.close(); }
+});
+
+// 내 계정 정보 조회
+router.get('/me', jwtAuthentication, async (req, res) => {
+  const userId = req.user?.id || req.userId;
+  let connection;
+  try {
+    connection = await db.getConnection();
+    const result = await connection.execute(
+      `SELECT EMAIL, PROVIDER FROM USERS WHERE ID = :userId`,
+      { userId }, { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    if (result.rows.length === 0) return res.status(404).json({ result: false });
+    const row = result.rows[0];
+    res.json({ result: true, email: row.EMAIL, provider: row.PROVIDER || 'LOCAL' });
+  } catch(e) {
+    console.error('GET /me 에러:', e);
+    res.status(500).json({ result: false });
+  } finally { if (connection) await connection.close(); }
+});
+
+// 회원 탈퇴
+router.delete('/withdraw', jwtAuthentication, async (req, res) => {
+  const userId = req.user?.id || req.userId;
+  let connection;
+  try {
+    connection = await db.getConnection();
+    // Soft delete — 실제 삭제 대신 상태값 변경 권장
+    await connection.execute(
+      `UPDATE USERS SET STATUS = 'DELETED', DELETED_AT = CURRENT_TIMESTAMP WHERE ID = :userId`,
+      { userId }, { autoCommit: true }
+    );
+    res.json({ result: true });
+  } catch(e) {
+    console.error('탈퇴 에러:', e);
+    res.status(500).json({ result: false });
+  } finally { if (connection) await connection.close(); }
+});
+
 module.exports = router;

@@ -36,11 +36,16 @@ function Profile() {
   const [editProfileImage, setEditProfileImage] = useState(null);
   const [previewImage, setPreviewImage] = useState('');
 
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsData, setSettingsData] = useState({ email: '', currentPassword: '', newPassword: '', confirmPassword: '' });
+
   // 팔로우 모달 상태 관리
   const [isFollowModalOpen, setIsFollowModalOpen] = useState(false);
   const [followModalTab, setFollowModalTab] = useState(0); // 0: 팔로워, 1: 팔로잉
 
   const isOwnProfile = loginUser && loginUser.nickname === nickname;
+
+  const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).{8,}$/;
 
   // 1. 프로필 기본 데이터 및 내 게시글 목록 로드
   useEffect(() => {
@@ -50,7 +55,7 @@ function Profile() {
       try {
         const storedUser = JSON.parse(localStorage.getItem('userInfo') || '{}');
         const isMine = storedUser.nickname === nickname;
-        const url = isMine ? "http://localhost:3010/api/posts/my" : `http://localhost:3010/api/posts/user/${nickname}`;
+        const url = isMine ? "http://localhost:3010/api/posts/my" : `http://localhost:3010/user/${nickname}`;
 
         const response = await fetchWithAuth(url);
         const data = await response.json();
@@ -129,6 +134,21 @@ function Profile() {
               else window.location.reload(); 
           } else alert(data.message);
       } catch (error) { alert("프로필 수정 중 오류가 발생했습니다."); }
+  };
+
+  const handleSettingsOpen = async () => {
+    try {
+      const res = await fetchWithAuth('http://localhost:3010/user/me');
+      const data = await res.json();
+      if (data.result) {
+        setSettingsData({ 
+          email: data.email || '', 
+          provider: data.provider || 'LOCAL', // 'LOCAL','KAKAO','GOOGLE','NAVER'
+          currentPassword: '', newPassword: '', confirmPassword: '' 
+        });
+      }
+    } catch(e) {}
+    setIsSettingsOpen(true);
   };
 
   const handleCommentCountChange = (postId, changeValue) => {
@@ -233,9 +253,55 @@ function Profile() {
     });
   };
 
+const handleSettingsSubmit = async () => {
+    // 1. 빈 값 체크
+    if (!settingsData.currentPassword) return alert('현재 비밀번호를 입력해주세요.');
+    if (!settingsData.newPassword) return alert('새 비밀번호를 입력해주세요.');
+    if (!passwordRegex.test(settingsData.newPassword)) {
+        alert('비밀번호는 영문, 숫자, 특수문자를 포함한 8자 이상이어야 합니다.');
+        return;
+    }
+    
+    // 3. 비밀번호 일치 확인
+    if (settingsData.newPassword !== settingsData.confirmPassword) 
+        return alert('새 비밀번호가 일치하지 않습니다.');
+
+    try {
+        const res = await fetchWithAuth('http://localhost:3010/user/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                currentPassword: settingsData.currentPassword,
+                newPassword: settingsData.newPassword
+            })
+        });
+        const data = await res.json();
+        if (data.result) {
+            alert('비밀번호가 변경되었습니다.');
+            setIsSettingsOpen(false);
+        } else {
+            alert(data.message || '저장 실패');
+        }
+    } catch (e) { alert('오류가 발생했습니다.'); }
+};
+
+  // 회원탈퇴
+  const handleWithdraw = async () => {
+    if (!window.confirm('정말 탈퇴하시겠습니까?\n모든 데이터가 삭제되며 복구할 수 없습니다.')) return;
+    try {
+      const res = await fetchWithAuth('http://localhost:3010/user/withdraw', { method: 'DELETE' });
+      const data = await res.json();
+      if (data.result) {
+        localStorage.clear();
+        alert('탈퇴가 완료되었습니다.');
+        navigate('/');
+      } else alert(data.message || '탈퇴 실패');
+    } catch(e) { alert('오류가 발생했습니다.'); }
+  };
+
   return (
-    <Box sx={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center', width: '100%', py: 4 }}>
-      <Box sx={{ width: '100%', maxWidth: 935, px: 2 }}>
+    <Box sx={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center', width: '100%', py: 4, gap: 3 }}>
+       <Box sx={{ width: '100%', maxWidth: 935, px: 2 }}>
         
         {/* 프로필 헤더 */}
         <Box sx={{ display: 'flex', mb: 6, px: { xs: 2, md: 8 } }}>
@@ -251,7 +317,9 @@ function Profile() {
                 {isOwnProfile ? (
                     <>
                         <Button variant="contained" size="small" onClick={handleOpenEditModal} sx={{ whiteSpace: 'nowrap', minWidth: 'max-content', bgcolor: '#efefef', color: 'black', boxShadow: 'none', '&:hover': { bgcolor: '#dbdbdb', boxShadow: 'none' }, fontWeight: 'bold', borderRadius: 2, px: 2 }}>프로필 편집</Button>
-                        <IconButton size="small"><Settings /></IconButton>
+                        <IconButton size="small" onClick={handleSettingsOpen}>
+                          <Settings />
+                        </IconButton>
                     </>
                 ) : (
                     <Button variant="contained" size="small" onClick={handleFollowToggle} sx={{ whiteSpace: 'nowrap', minWidth: 'max-content', bgcolor: profileUser.isFollowing ? 'transparent' : '#0095f6', color: profileUser.isFollowing ? 'black' : 'white', fontWeight: 'bold', boxShadow: 'none', borderRadius: 2, px: 4, '&:hover': { bgcolor: profileUser.isFollowing ? 'transparent' : '#1877f2', boxShadow: 'none' } }}>
@@ -301,6 +369,16 @@ function Profile() {
                       <Typography variant="body2" align="center" color="text.secondary" sx={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.title}</Typography>
                     </Box>
                   )}
+                  {/* ✨ 통계 오버레이 */}
+                  <Box className="stats-overlay" sx={{
+                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                    bgcolor: 'rgba(0,0,0,0.45)', opacity: 0, transition: 'opacity 0.2s ease',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2
+                  }}>
+                    <Typography sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.85rem' }}>❤️ {post.likeCount || 0}</Typography>
+                    <Typography sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.85rem' }}>💬 {post.commentCount || 0}</Typography>
+                    <Typography sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.85rem' }}>👁️ {post.viewCount || 0}</Typography>
+                  </Box>
                 </Box>
               ))
             ) : (
@@ -370,6 +448,84 @@ function Profile() {
             <Button onClick={handleProfileEditSubmit} variant="contained" disableElevation>저장</Button>
         </DialogActions>
       </Dialog>
+
+      {/* 계정정보수정 */}
+      <Dialog open={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ fontWeight: 'bold', textAlign: 'center', borderBottom: '1px solid #efefef' }}>계정 설정</DialogTitle>
+      <DialogContent sx={{ p: 4 }}>
+        <Stack spacing={3} sx={{ mt: 1 }}>
+
+          {/* 가입 유형 */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ minWidth: 80 }}>가입 유형</Typography>
+            <Box sx={{ 
+              px: 1.5, py: 0.5, borderRadius: 2, fontSize: '0.8rem', fontWeight: 'bold',
+              bgcolor: settingsData.provider === 'KAKAO' ? '#FEE500' 
+                    : settingsData.provider === 'GOOGLE' ? '#EA4335'
+                    : settingsData.provider === 'NAVER' ? '#03C75A' : '#1976d2',
+              color: settingsData.provider === 'KAKAO' ? '#3C1E1E' : 'white'
+            }}>
+              {settingsData.provider === 'KAKAO' ? '카카오' 
+            : settingsData.provider === 'GOOGLE' ? 'Google'
+            : settingsData.provider === 'NAVER' ? '네이버' : '일반'}
+            </Box>
+          </Box>
+
+          {/* 이메일 (읽기전용) */}
+          <TextField
+            label="이메일" fullWidth
+            value={settingsData.email}
+            InputProps={{ readOnly: true }}
+            helperText="이메일은 변경할 수 없습니다."
+            sx={{ '& .MuiInputBase-input': { color: 'text.secondary' } }}
+          />
+
+          {/* 소셜 가입자는 비밀번호 변경 불필요 */}
+          {settingsData.provider === 'LOCAL' && (
+            <>
+              <Divider><Typography variant="caption" color="text.secondary">비밀번호 변경</Typography></Divider>
+              <TextField label="현재 비밀번호" fullWidth type="password"
+                value={settingsData.currentPassword}
+                onChange={(e) => setSettingsData(prev => ({ ...prev, currentPassword: e.target.value }))}
+              />
+              <TextField 
+                  label="새 비밀번호" fullWidth type="password"
+                  value={settingsData.newPassword}
+                  onChange={(e) => setSettingsData(prev => ({ ...prev, newPassword: e.target.value }))}
+                  // ✨ 규칙에 맞지 않으면 빨간색 에러 표시
+                  error={settingsData.newPassword !== '' && !passwordRegex.test(settingsData.newPassword)}
+                  helperText={settingsData.newPassword !== '' && !passwordRegex.test(settingsData.newPassword) ? "영문, 숫자, 특수문자 포함 8자 이상이어야 합니다." : ""}
+              />
+              <TextField label="새 비밀번호 확인" fullWidth type="password"
+                value={settingsData.confirmPassword}
+                onChange={(e) => setSettingsData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                error={settingsData.newPassword !== settingsData.confirmPassword && settingsData.confirmPassword !== ''}
+                helperText={settingsData.newPassword !== settingsData.confirmPassword && settingsData.confirmPassword !== '' ? '비밀번호가 일치하지 않습니다.' : ''}
+              />
+            </>
+          )}
+
+          {/* 회원탈퇴 */}
+          <Divider />
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box>
+              <Typography variant="body2" fontWeight="bold" color="error">회원 탈퇴</Typography>
+              <Typography variant="caption" color="text.secondary">탈퇴 시 모든 데이터가 삭제됩니다.</Typography>
+            </Box>
+            <Button variant="outlined" color="error" size="small" onClick={handleWithdraw}>
+              탈퇴하기
+            </Button>
+          </Box>
+
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ p: 3, pt: 0 }}>
+        <Button onClick={() => setIsSettingsOpen(false)} color="inherit">취소</Button>
+        {settingsData.provider === 'LOCAL' && (
+          <Button onClick={handleSettingsSubmit} variant="contained" disableElevation>저장</Button>
+        )}
+      </DialogActions>
+    </Dialog>
 
       <PostDetailModal 
         open={Boolean(selectedPost)} 
