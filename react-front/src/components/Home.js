@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Card, CardHeader, CardContent, Avatar, TextField, Stack, Chip, Button } from '@mui/material';
+import { Box, Typography, Card, CardHeader, CardContent, Avatar, Stack, Chip, Button } from '@mui/material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Write from './Write';
 import { fetchWithAuth } from '../utils/api'; 
 import PostDetailModal, { ActionBar, ImageSlider, QuoteBox } from '../components/PostDetailModal';
+import RightSidebar from '../components/RightSidebar';
 
 function Home() {
   const location = useLocation();
@@ -18,6 +19,10 @@ function Home() {
   const [selectedPost, setSelectedPost] = useState(null);
   const [quotePost, setQuotePost] = useState(null);
   const [focusComment, setFocusComment] = useState(false);
+
+  // ✨ 사이드바 새로고침을 위한 트리거 상태 추가
+  const [followTrigger, setFollowTrigger] = useState(0);
+  const [likeTrigger, setLikeTrigger] = useState(0);
 
   useEffect(() => {
     const queryParams = new URLSearchParams(location.search);
@@ -36,9 +41,7 @@ function Home() {
       try {
         const response = await fetchWithAuth("http://localhost:3010/api/posts");
         const data = await response.json();
-        if (data.result) {
-          setPosts(data.posts);
-        }
+        if (data.result) setPosts(data.posts);
       } catch (error) { console.error(error); }
       finally { setIsLoading(false); }
     };
@@ -48,13 +51,11 @@ function Home() {
   useEffect(() => {
     const openPostId = location.state?.openPostId;
     if (!openPostId) return;
-
-    // posts가 이미 로드된 경우
     if (posts.length > 0) {
       const target = posts.find(p => p.id === openPostId);
       if (target) {
         setSelectedPost(target);
-        navigate('/home', { replace: true, state: {} }); // state 초기화
+        navigate('/home', { replace: true, state: {} });
       }
     }
   }, [location.state?.openPostId, posts]);
@@ -70,11 +71,11 @@ function Home() {
     setPosts(prevPosts => prevPosts.map(p => p.id === postId ? {
         ...p, isLiked: !currentIsLiked, likeCount: currentIsLiked ? p.likeCount - 1 : p.likeCount + 1
     } : p));
-
     if (selectedPost && selectedPost.id === postId) {
         setSelectedPost(prev => ({ ...prev, isLiked: !currentIsLiked, likeCount: currentIsLiked ? prev.likeCount - 1 : prev.likeCount + 1 }));
     }
     await fetchWithAuth(`http://localhost:3010/api/posts/${postId}/like`, { method: 'POST' });
+    setLikeTrigger(prev => prev + 1);
   };
 
   const handleProfileClick = (e, nickname) => {
@@ -105,29 +106,34 @@ function Home() {
       const data = await response.json();
       if (data.result) {
         setPosts(prevPosts => prevPosts.map(post => post.id === postId ? { ...post, isScrapped: !currentScrapState } : post));
-        if (selectedPost && selectedPost.id === postId) {
-          setSelectedPost(prev => ({ ...prev, isScrapped: !currentScrapState }));
-        }
+        if (selectedPost && selectedPost.id === postId) setSelectedPost(prev => ({ ...prev, isScrapped: !currentScrapState }));
       }
     } catch (error) { console.error("보관함 처리 실패:", error); }
   };
 
+  // 피드에서 팔로우/언팔로우 버튼 클릭 시
   const handleFollow = async (e, post) => {
     e.stopPropagation();
     if (post.authorName === userInfo?.nickname) return;
 
     setPosts(prev => prev.map(p =>
-      p.authorName === post.authorName
-        ? { ...p, isFollowing: !p.isFollowing }
-        : p
+      p.authorName === post.authorName ? { ...p, isFollowing: !p.isFollowing } : p
     ));
     await fetchWithAuth(`http://localhost:3010/user/${post.authorName}/follow`, { method: 'POST' });
+    
+    // ✨ 우측 사이드바가 리스트를 다시 불러오도록 신호(Trigger)를 보냄!
+    setFollowTrigger(prev => prev + 1); 
+  };
+
+  // ✨ 우측 사이드바에서 특정 유저를 팔로우 했을 때 피드에도 즉각 반영
+  const handleSidebarFollow = (nickname) => {
+    setPosts(prev => prev.map(p => p.authorName === nickname ? { ...p, isFollowing: true } : p));
   };
 
   return (
     <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%', py: 3 }}>
-      <Box sx={{ display: 'flex', width: '100%', maxWidth: 1000, gap: 4 }}>
-        <Box sx={{ flex: 1, maxWidth: 600 }}>
+      <Box sx={{ display: 'flex', width: '100%', maxWidth: 1050, justifyContent: 'center', gap: 10 }}>
+        <Box sx={{ flex: 1, maxWidth: 550 }}>
           {isLoading ? <Typography>피드를 불러오는 중...</Typography> : 
            posts.length === 0 ? <Typography sx={{ textAlign: 'center', mt: 5 }}>검색 결과가 없습니다.</Typography> : 
            <>
@@ -138,7 +144,6 @@ function Home() {
                    title={<Typography sx={{ fontWeight: 'bold', fontSize: '0.9rem', cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }} onClick={(e) => handleProfileClick(e, post.authorName)}>{post.authorName}</Typography>} 
                    subheader={post.createdAt} 
                    action={
-                    // 본인 게시물엔 버튼 숨김
                     post.authorName !== userInfo?.nickname && (
                       <Button
                         size="small"
@@ -157,7 +162,6 @@ function Home() {
                  </Box>
 
                  <CardContent sx={{ pt: 1, pb: 0, cursor: 'pointer' }} onClick={() => handlePostClick(post)}>
-                   
                    <Typography 
                      onClick={() => handlePostClick(post)}
                      sx={{ 
@@ -180,6 +184,15 @@ function Home() {
              {displayCount < posts.length && <Button fullWidth onClick={() => setDisplayCount(prev => prev + 5)} sx={{ mb: 5 }}>더보기</Button>}
            </>}
         </Box>
+
+        {/* ✨ 신호(Trigger)와 콜백을 사이드바로 넘겨줌 */}
+        <RightSidebar 
+           userInfo={userInfo} 
+           followTrigger={followTrigger} 
+           onSidebarFollow={handleSidebarFollow} 
+           likeTrigger={likeTrigger}
+        />
+
       </Box>
 
       <PostDetailModal 

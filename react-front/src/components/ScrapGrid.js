@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, InputBase, Grid } from '@mui/material';
+import { Box, InputBase, Grid, Typography } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import { fetchWithAuth } from '../utils/api';
 
-// 왜(Why)?: 프로필 페이지의 '저장됨' 탭에서 렌더링될 전용 컴포넌트입니다.
-// Client-side 필터링을 통해 서버 통신 없이 즉각적인 검색(MVP 최적화)을 지원합니다.
 export const ScrapGrid = () => {
   const [scraps, setScraps] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -22,30 +20,29 @@ export const ScrapGrid = () => {
     loadScraps();
   }, []);
 
-  // 검색어에 따른 프론트엔드 즉시 필터링
+  // 해시태그 기반 검색 (제목 검색 기능 제거)
   const filteredScraps = scraps.filter(post => 
-    post.title.toLowerCase().includes(searchTerm.toLowerCase())
+    post.hashtags && post.hashtags.some(tag => 
+      tag.toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
 
   return (
     <Box sx={{ width: '100%', mt: 2 }}>
-      {/* 프론트엔드 검색 바 */}
       <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#f1f3f4', p: 1, borderRadius: 2, mb: 3 }}>
         <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
         <InputBase 
-          placeholder="보관함 검색 (제목)" 
+          placeholder="보관함 검색 (해시태그)" 
           fullWidth 
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </Box>
 
-      {/* 스크랩 그리드 (제목이 포함된 중간 형태) */}
       <Grid container spacing={2}>
         {filteredScraps.map(post => (
           <Grid item xs={4} sm={3} key={post.id}>
             <Box sx={{ cursor: 'pointer', transition: '0.2s', '&:hover': { opacity: 0.8 } }}>
-              {/* 정방형 이미지 비율 유지 */}
               <Box sx={{ position: 'relative', width: '100%', paddingTop: '100%', bgcolor: '#eee', borderRadius: 1, overflow: 'hidden' }}>
                 {post.thumbnail && (
                   <img 
@@ -55,10 +52,6 @@ export const ScrapGrid = () => {
                   />
                 )}
               </Box>
-              {/* 이미지 하단 제목 (1줄 넘어가면 말줄임표) */}
-              <Typography variant="body2" fontWeight="bold" sx={{ mt: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {post.title}
-              </Typography>
             </Box>
           </Grid>
         ))}

@@ -55,7 +55,9 @@ function Profile() {
       try {
         const storedUser = JSON.parse(localStorage.getItem('userInfo') || '{}');
         const isMine = storedUser.nickname === nickname;
-        const url = isMine ? "http://localhost:3010/api/posts/my" : `http://localhost:3010/user/${nickname}`;
+        const url = isMine 
+          ? "http://localhost:3010/api/posts/my" 
+          : `http://localhost:3010/api/posts/user/${encodeURIComponent(nickname)}`;
 
         const response = await fetchWithAuth(url);
         const data = await response.json();
@@ -93,6 +95,13 @@ function Profile() {
       fetchScraps();
     }
   }, [tabValue, isOwnProfile]);
+
+  useEffect(() => {
+    setTabValue(0);
+    if (location.state?.defaultTab !== undefined) {
+      setTabValue(location.state.defaultTab);
+    }
+  }, [location.pathname, location.state]);
 
   const handleOpenEditModal = () => {
       setEditNickname(profileUser.nickname);
@@ -390,7 +399,7 @@ const handleSettingsSubmit = async () => {
             <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#f1f3f4', p: 1, borderRadius: 2, mb: 3 }}>
               <SearchIcon sx={{ color: 'text.secondary', mr: 1, ml: 1 }} />
               <InputBase 
-                placeholder="보관함 검색 (제목, 내용, 해시태그 포함)" 
+                placeholder="보관함 검색 (내용, 해시태그 포함)" 
                 fullWidth 
                 value={scrapSearch}
                 onChange={(e) => setScrapSearch(e.target.value)}
@@ -412,9 +421,6 @@ const handleSettingsSubmit = async () => {
                         </Box>
                       )}
                     </Box>
-                    <Typography variant="body2" fontWeight="bold" sx={{ mt: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {scrap.title}
-                    </Typography>
                   </Box>
                 ))
               ) : (

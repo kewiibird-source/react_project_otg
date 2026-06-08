@@ -102,12 +102,50 @@ export const ImageSlider = ({ images, height }) => {
 
 export const QuoteBox = ({ parentPost, onOpenOriginal, onNavigateProfile }) => {
   if (!parentPost) return null;
+
   return (
-    <Box onClick={(e) => { if (onOpenOriginal) { e.stopPropagation(); onOpenOriginal(parentPost.id); } }} sx={{ mt: 2, p: 1.5, display: 'flex', alignItems: 'center', border: '1px solid #e0e0e0', borderRadius: 2, bgcolor: '#fafafa', cursor: onOpenOriginal ? 'pointer' : 'default' }}>
-      {parentPost.imageUrl && <Avatar variant="rounded" src={parentPost.imageUrl} sx={{ width: 70, height: 70, mr: 1.5 }} />}
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography variant="caption" fontWeight="bold" onClick={(e) => onNavigateProfile(e, parentPost.authorName)}>@{parentPost.authorName}</Typography>
-      </Box>
+    <Box 
+      onClick={(e) => { 
+        e.stopPropagation(); 
+        if (onOpenOriginal) onOpenOriginal(parentPost.id); 
+      }}
+      sx={{ 
+        mt: 1.5, p: 2, borderRadius: 2, 
+        border: '1px solid #dbdbdb', 
+        bgcolor: '#f9f9f9', 
+        cursor: 'pointer', 
+        '&:hover': { bgcolor: '#f1f1f1' } 
+      }}
+    >
+      {/* 1. 작성자 닉네임 */}
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+        <Typography 
+          variant="caption" 
+          fontWeight="bold" 
+          onClick={(e) => { e.stopPropagation(); onNavigateProfile(e, parentPost.authorName); }}
+          sx={{ '&:hover': { textDecoration: 'underline' } }}
+        >
+          @{parentPost.authorName}
+        </Typography>
+      </Stack>
+
+      {/* 2. 내용 (두 줄 요약) */}
+      <Typography variant="body2" color="text.secondary" sx={{ 
+        display: '-webkit-box', 
+        WebkitLineClamp: 2, 
+        WebkitBoxOrient: 'vertical', 
+        overflow: 'hidden',
+        fontSize: '0.85rem'
+      }}>
+        {parentPost.content}
+      </Typography>
+      
+      {/* 3. 인용된 게시글의 이미지가 있다면 미리보기 */}
+      {parentPost.imageUrl && (
+        <Box sx={{ mt: 1, width: 50, height: 50, borderRadius: 1, overflow: 'hidden' }}>
+          <img src={parentPost.imageUrl} alt="quote_thumb" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        </Box>
+      )}
     </Box>
   );
 };

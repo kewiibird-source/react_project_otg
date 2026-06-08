@@ -84,11 +84,16 @@ function Menu() {
     navigate('/login', { replace: true }); 
   };
 
-  // ✨ 보관함 클릭 로직
+  // Menu.js 내부
   const handleBookmarkMenuClick = () => {
-    // 프로필 페이지로 이동하면서 state로 탭 정보를 넘겨줍니다.
+    // 보관함 탭은 1번
     navigate(`/profile/${myNickname}`, { state: { defaultTab: 1 } });
-  }
+  };
+
+  const handleProfileMenuClick = () => {
+    // 게시물 탭은 0번
+    navigate(`/profile/${myNickname}`, { state: { defaultTab: 0 } });
+  };
 
   // 🎨 1. 공통 메뉴 스타일 변수 선언 
   const menuItemStyle = {
@@ -136,49 +141,35 @@ function Menu() {
             backgroundColor: '#ffffff',
             borderRight: 'none',
             boxShadow: '2px 0 10px rgba(0,0,0,0.05)',
-            overflowX: 'hidden',           // ✨ 접혔을 때 텍스트 잘림 방지
-            transition: 'width 0.3s ease', // ✨ 부드러운 애니메이션
+            overflowX: 'hidden',           
+            transition: 'width 0.3s ease'
           },
         }}
       >
         <Toolbar sx={{ padding: '12px 8px', justifyContent: 'center', minHeight: '64px' }}>
-          {!isOpen && (
-            <Box
-              onClick={() => navigate('/home')}
-              sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
+          <Box
+            onClick={() => navigate('/home')}
+            sx={{ 
+              cursor: 'pointer', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            {isOpen ? (
+              // 펼쳐졌을 때: 전체 로고
+              <Box component="img" src={logoImage} alt="OverTheGlass 로고" sx={{ width: 130, height: 'auto' }} />
+            ) : (
+              // 접혔을 때: 심볼 로고 (직접 SVG를 넣어 깔끔하게 처리)
               <svg width="32" height="32" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path 
-                  d="M50 20 L56 44 L80 50 L56 56 L50 80 L44 56 L20 50 L44 44 Z" 
-                  fill="black"
-                />
+                <path d="M50 20 L56 44 L80 50 L56 56 L50 80 L44 56 L20 50 L44 44 Z" fill="black" />
               </svg>
-            </Box>
-          )}
-
-          {/* 펼쳐졌을 때: 전체 로고 */}
-          {isOpen && (
-            <Box
-              component="img"
-              src={logoImage}
-              alt="OverTheGlass 로고"
-              onClick={() => navigate('/home')}
-              sx={{
-                width: 130,
-                height: 'auto',
-                objectFit: 'contain',
-                cursor: 'pointer',
-                opacity: isHovered ? 1 : 0,
-                transition: 'opacity 0.2s ease 0.1s, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                '&:hover': { transform: 'scale(1.08)' },
-                '&:active': { transform: 'scale(0.95)' }
-              }}
-            />
-          )}
+            )}
+          </Box>
         </Toolbar>
         
-        {/* ✨ 스타일이 적용된 메뉴 리스트 시작 */}
-        <List sx={{ px: 1 }}> {/* px: 1 을 줘서 메뉴가 벽에 너무 딱 붙지 않게 여백 추가 */}
+        <List sx={{ px: 1 }}> 
           
           {/* 1. 홈 */}
           <ListItem disablePadding sx={{ mb: 0.5 }}>
@@ -224,7 +215,7 @@ function Menu() {
 
           {/* 5. 프로필 */}
           <ListItem disablePadding sx={{ mb: 0.5 }}>
-            <ListItemButton component={Link} to={`/profile/${myNickname}`} sx={{ ...menuItemStyle, borderRadius: '8px', pl: 1.5 }}>
+            <ListItemButton onClick={handleProfileMenuClick} component={Link} to={`/profile/${myNickname}`} sx={{ ...menuItemStyle, borderRadius: '8px', pl: 1.5 }}>
               <ListItemIcon sx={{ color: '#555', minWidth: 40 }}><Person /></ListItemIcon>
               {isOpen && <ListItemText primary="프로필" sx={{ opacity: isOpen ? 1 : 0, transition: 'opacity 0.15s ease 0.1s', whiteSpace: 'nowrap'}} />}
             </ListItemButton>

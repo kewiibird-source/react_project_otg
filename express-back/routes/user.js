@@ -100,10 +100,14 @@ router.post('/login', async (req, res) => {
   let connection;
   try {
     connection = await db.getConnection();
+
+    console.log("로그인 시도 이메일:", email);
     
     const result = await connection.execute(`SELECT id, email, password, nickname, status FROM users WHERE email = :email`,
       [email],dbOptions
     );
+
+    console.log("DB 조회 결과:", result.rows);
     
     if (result.rows.length === 0) return res.json({ result: false, message: '존재하지 않는 계정입니다.' });
     const dbUser = result.rows[0]; 

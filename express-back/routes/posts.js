@@ -569,6 +569,46 @@ router.delete('/:id', jwtAuthentication, async (req, res) => {
     } finally { if (connection) await connection.close(); }
 });
 
+// 팔로우 추천 (팔로워 많은 순, 내가 안 팔로우한 유저)
+router.get('/users/recommend', jwtAuthentication, async (req, res) => {
+  let connection;
+  try {
+    connection = await db.getConnection();
+    const userId = req.user?.id || req.userId;
+    const sql = `
+      SELECT U.NICKNAME AS "nickname", U.PROFILE_IMAGE AS "profileImage"
+      FROM USERS U
+      WHERE U.ID != :userId
+        AND U.ID NOT IN (SELECT FOLLOWING_ID FROM FOLLOWS WHERE FOLLOWER_ID = :userId)
+      ORDER BY (SELECT COUNT(*) FROM FOLLOWS WHERE FOLLOWING_ID = U.ID) DESC
+      FETCH FIRST 5 ROWS ONLY
+    `;
+    const result = await connection.execute(sql, { userId }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+    res.json({ result: true, users: result.rows });
+  } catch (e) { res.status(500).json({ result: false }); }
+  finally { if (connection) await connection.close(); }
+});
+
+// 좋아요 TOP 5 게시물
+router.get('/top', jwtAuthentication, async (req, res) => {
+  let connection;
+  try {
+    connection = await db.getConnection();
+    const sql = `
+      SELECT P.ID AS "id", P.CONTENT AS "content", P.THUMBNAIL_URL AS "thumbnail",
+             U.NICKNAME AS "authorName",
+             NVL((SELECT COUNT(*) FROM LIKES WHERE POST_ID = P.ID), 0) AS "likeCount"
+      FROM POSTS P JOIN USERS U ON P.USER_ID = U.ID
+      WHERE P.STATUS = 'PUBLISHED'
+      ORDER BY NVL((SELECT COUNT(*) FROM LIKES WHERE POST_ID = P.ID), 0) DESC
+      FETCH FIRST 5 ROWS ONLY
+    `;
+    const result = await connection.execute(sql, {}, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+    res.json({ result: true, posts: result.rows });
+  } catch (e) { res.status(500).json({ result: false }); }
+  finally { if (connection) await connection.close(); }
+});
+
 // 조회수 증가
 router.post('/:id/view', jwtAuthentication, async (req, res) => {
     let connection;

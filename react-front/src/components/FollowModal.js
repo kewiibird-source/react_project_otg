@@ -100,10 +100,15 @@ function FollowModal({ open, onClose, initialTab, targetNickname, loginUser, onF
         onChange={(e, newValue) => setTabValue(newValue)} 
         variant="fullWidth" 
         textColor="inherit" 
-        TabIndicatorProps={{ sx: { bgcolor: 'text.primary', height: 1 } }}
         sx={{ 
-          '& .MuiTab-root': { bgcolor: 'transparent !important' },
-          '& .Mui-selected': { bgcolor: 'transparent !important' } 
+          '& .MuiTab-root': { 
+            backgroundColor: '#ffffff', // 선택 안 된 탭: 흰색
+            transition: 'background-color 0.2s ease'
+          },
+          '& .Mui-selected': { 
+            backgroundColor: '#f5f5f51f !important', 
+            color: '#000000 !important'
+          }
         }}
       >
         <Tab label="팔로워" sx={{ fontWeight: tabValue === 0 ? 'bold' : 'normal' }} />
