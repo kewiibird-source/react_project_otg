@@ -12,10 +12,10 @@ function Profile() {
   const { nickname } = useParams(); 
   const location = useLocation(); 
 
-  const [loginUser] = useState(() => {
+  const loginUser = (() => {
     const storedUser = localStorage.getItem('userInfo');
     return storedUser ? JSON.parse(storedUser) : null;
-  });
+  })();
   
   const [profileUser, setProfileUser] = useState({ 
     nickname: '', bio: '', profileImage: '', followerCount: 0, followingCount: 0, isFollowing: false 

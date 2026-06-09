@@ -187,6 +187,15 @@ const PostDetailModal = ({ open, post, onClose, currentUser, onLike, onQuoteClic
     setIsEditingPost(true);
   };
 
+  const [displayedAt, setDisplayedAt] = useState('');
+  useEffect(() => {
+    if (post) {
+      setDisplayContent(post.content);
+      setDisplayedAt(post.createdAt); // ← 추가 (이미 "(수정됨)" 포함된 문자열)
+      fetchComments(post.id);
+    }
+  }, [post]);
+
   const handleUpdatePost = async () => {
     try {
       const res = await fetchWithAuth(`http://localhost:3010/api/posts/${post.id}`, {
@@ -194,9 +203,18 @@ const PostDetailModal = ({ open, post, onClose, currentUser, onLike, onQuoteClic
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editPostData)
       });
-      if ((await res.json()).result) {
+      const data = await res.json();
+      if (data.result) {
         setDisplayContent(editPostData.content);
-        setIsEditingPost(false); 
+
+        // ✅ 수정됨 표시: 현재 시각으로 createdAt 문자열 직접 생성
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const updatedLabel = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())} (수정됨)`;
+        setDisplayContent(editPostData.content);
+        setDisplayedAt(updatedLabel); // ← 추가할 state
+
+        setIsEditingPost(false);
       }
     } catch (error) { console.error("수정 실패:", error); }
   };
@@ -292,7 +310,7 @@ const PostDetailModal = ({ open, post, onClose, currentUser, onLike, onQuoteClic
                   {post.hashtags && post.hashtags.length > 0 && (
                     <Stack direction="row" spacing={0.5} sx={{ mt: 1 }}>{post.hashtags.map(t => <Typography key={t} variant="caption" color="primary">#{t} </Typography>)}</Stack>
                   )}
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>{post.createdAt}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>{displayedAt || post.createdAt}</Typography>
                   <QuoteBox parentPost={post.parentPost} onOpenOriginal={onOpenOriginal} onNavigateProfile={onNavigateProfile} />
               </Box>
             </Box>

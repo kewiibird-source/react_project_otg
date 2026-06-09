@@ -80,8 +80,8 @@ router.post('/join', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
     const insertSql = 
     `
-      INSERT INTO users (email, nickname, password, provider, email_verified, birth_date, last_login_at) 
-      VALUES (:email, :nickname, :hashedPassword, 'LOCAL', 1, TO_DATE(:birthDate, 'YYYY-MM-DD'), CURRENT_TIMESTAMP)
+      INSERT INTO users (email, nickname, password, provider, provider_id, email_verified, birth_date, last_login_at) 
+      VALUES (:email, :nickname, :hashedPassword, 'LOCAL', :email, 1, TO_DATE(:birthDate, 'YYYY-MM-DD'), CURRENT_TIMESTAMP)
     `;
     await connection.execute(insertSql, { email, nickname, hashedPassword, birthDate }, dbOptions);
     

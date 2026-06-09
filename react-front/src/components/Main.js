@@ -17,58 +17,6 @@ const OTG_LOGO_PATHS = [
   "M4808 4683 c24 -8 53 -28 66 -46 20 -27 309 -671 366 -817 25 -63 41 -62 70 7 117 284 336 775 359 803 16 19 48 43 72 52 l44 17 -150 0 c-146 0 -149 -1 -103 -15 91 -28 89 -61 -14 -304 -42 -96 -99 -231 -128 -300 -29 -69 -56 -129 -60 -133 -7 -8 -272 603 -283 653 -10 42 13 73 63 86 39 11 20 12 -150 12 -186 0 -193 0 -152 -15z",
 ];
 
-const styles = {
-  page: {
-    width: "100vw",
-    height: "100vh",
-    backgroundColor: "#F5F0EB",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "defualt",
-    overflow: "hidden",
-    position: "relative",
-    userSelect: "none",
-  },
-  logoWrap: (visible) => ({
-    cursor : "pointer",
-    opacity: visible ? 1 : 0,
-    transform: visible ? "translateY(0)" : "translateY(-60px)",
-    transition: "opacity 1.2s cubic-bezier(0.22,1,0.36,1), transform 1.2s cubic-bezier(0.22,1,0.36,1)",
-  }),
-  hint: (visible) => ({
-    position: "absolute",
-    bottom: 52,
-    left: "50%",
-    transform: "translateX(-50%)",
-    fontSize: 12,
-    letterSpacing: "0.18em",
-    color: "#9a9187",
-    textTransform: "uppercase",
-    fontFamily: "Georgia, serif",
-    opacity: visible ? 1 : 0,
-    transition: "opacity 1s ease",
-    whiteSpace: "nowrap",
-  }),
-  fadeOut: (fading) => ({
-    position: "fixed",
-    inset: 0,
-    backgroundColor: "#F5F0EB",
-    opacity: fading ? 0 : 1,
-    transition: fading ? "opacity 0.6s ease" : "none",
-    pointerEvents: "none",
-    zIndex: 20,
-  }),
-  rippleContainer: {
-    position: "fixed",
-    inset: 0,
-    pointerEvents: "none",
-    zIndex: 10,
-    overflow: "hidden",
-  },
-};
-
 function Main() {
   const navigate = useNavigate();
   const [logoVisible, setLogoVisible] = useState(false);
@@ -77,29 +25,44 @@ function Main() {
   const [ripples, setRipples] = useState([]);
 
   useEffect(() => {
-    // 1. 진입 시 서서히 나타나는 효과를 위한 타이머
-    const t1 = setTimeout(() => setLogoVisible(true), 500); 
-    const t2 = setTimeout(() => setHintVisible(true), 2000); 
-    
+    const t1 = setTimeout(() => setLogoVisible(true), 300);
+    const t2 = setTimeout(() => setHintVisible(true), 1800);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
 
   const handleClick = (e) => {
-    // 이제 fading이 false이므로 바로 실행됨
-    
+    if (fading) return;
     const id = Date.now();
     const size = Math.max(window.innerWidth, window.innerHeight) * 2;
     setRipples([{ id, x: e.clientX - size / 2, y: e.clientY - size / 2, size }]);
-
-    setFading(true); // 이제 이동 모드로 변경
+    setFading(true);
     setTimeout(() => navigate("/login"), 700);
   };
 
   return (
     <>
-      <div style={styles.fadeOut(fading)} />
+      <style>{`
+        @keyframes otgRipple {
+          from { transform: scale(0); opacity: 1; }
+          to   { transform: scale(6); opacity: 0; }
+        }
+      `}</style>
 
-      <div style={styles.rippleContainer}>
+      {/* 클릭 후 화면을 덮는 오버레이: 평소엔 opacity:0(투명), 클릭 후 opacity:1(불투명)으로 전환 */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          backgroundColor: "#F5F0EB",
+          opacity: fading ? 1 : 0,
+          transition: fading ? "opacity 0.6s ease" : "none",
+          pointerEvents: "none",
+          zIndex: 20,
+        }}
+      />
+
+      {/* 리플 이펙트 레이어 */}
+      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 10, overflow: "hidden" }}>
         {ripples.map((r) => (
           <div
             key={r.id}
@@ -117,21 +80,30 @@ function Main() {
         ))}
       </div>
 
-      <style>{`
-        @keyframes otgRipple {
-          from { transform: scale(0); opacity: 1; }
-          to   { transform: scale(6); opacity: 0; }
-        }
-      `}</style>
-
-      <div style={styles.page}>
-        
-        {/* 로고를 클릭했을 때만 이동하도록 onClick을 여기로 이동 */}
-        <div style={{ 
-            ...styles.logoWrap(logoVisible), 
-            cursor: 'pointer' 
-          }} 
-          onClick={handleClick}
+      {/* 메인 화면 */}
+      <div
+        onClick={handleClick}
+        style={{
+          width: "100vw",
+          height: "100vh",
+          backgroundColor: "#F5F0EB",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          overflow: "hidden",
+          position: "relative",
+          userSelect: "none",
+        }}
+      >
+        {/* 로고: 위에서 아래로 떨어지는 애니메이션 */}
+        <div
+          style={{
+            opacity: logoVisible ? 1 : 0,
+            transform: logoVisible ? "translateY(0)" : "translateY(-60px)",
+            transition: "opacity 1.2s cubic-bezier(0.22,1,0.36,1), transform 1.2s cubic-bezier(0.22,1,0.36,1)",
+          }}
         >
           <svg
             viewBox="0 0 1774 887"
@@ -146,7 +118,26 @@ function Main() {
           </svg>
         </div>
 
-        <p style={styles.hint(hintVisible)}>click to enter</p>
+        {/* 힌트 텍스트 */}
+        <p
+          style={{
+            position: "absolute",
+            bottom: 52,
+            left: "50%",
+            transform: "translateX(-50%)",
+            fontSize: 12,
+            letterSpacing: "0.18em",
+            color: "#9a9187",
+            textTransform: "uppercase",
+            fontFamily: "Georgia, serif",
+            opacity: hintVisible ? 1 : 0,
+            transition: "opacity 1s ease",
+            whiteSpace: "nowrap",
+            margin: 0,
+          }}
+        >
+          click to enter
+        </p>
       </div>
     </>
   );
