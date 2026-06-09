@@ -58,28 +58,31 @@
 ## 🛠 사용 기술 및 API
 
 ### Frontend
-- React
-- (사용한 라이브러리 추가)
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![React Router](https://img.shields.io/badge/React_Router-CA4245?style=for-the-badge&logo=react-router&logoColor=white)
+![MUI](https://img.shields.io/badge/MUI-007FFF?style=for-the-badge&logo=mui&logoColor=white)
+![Axios](https://img.shields.io/badge/Axios-5A29E4?style=for-the-badge&logo=axios&logoColor=white)
 
 ### Backend
-- Node.js
-- Express
+![Express](https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white)
+![NodeJS](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![JWT](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
 
 ### Database
-- Oracle DB
+![Oracle](https://img.shields.io/badge/Oracle-F80000?style=for-the-badge&logo=oracle&logoColor=white)
 
 ### 외부 API / 서비스
-- **Gmail SMTP** - 이메일 인증
-- **Google OAuth 2.0** - 구글 소셜 로그인
-- **Kakao OAuth 2.0** - 카카오 소셜 로그인  
-- **Naver OAuth 2.0** - 네이버 소셜 로그인
-- **포트원 (PortOne)** - 본인 인증
-- **JWT (JSON Web Token)** - 회원 인증 / Access Token + Refresh Token
+![Gmail](https://img.shields.io/badge/Gmail_SMTP-EA4335?style=for-the-badge&logo=gmail&logoColor=white)
+![Google](https://img.shields.io/badge/Google_OAuth-4285F4?style=for-the-badge&logo=google&logoColor=white)
+![Kakao](https://img.shields.io/badge/Kakao_OAuth-FFCD00?style=for-the-badge&logo=kakao&logoColor=black)
+![Naver](https://img.shields.io/badge/Naver_OAuth-03C75A?style=for-the-badge&logo=naver&logoColor=white)
+![PortOne](https://img.shields.io/badge/포트원-007AFF?style=for-the-badge&logoColor=white)
+![JWT](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
 
 ### 개발 도구
-- Git / GitHub
-- Visual Studio Code
-- (기타 도구)
+![VSCode](https://img.shields.io/badge/VS_Code-007ACC?style=for-the-badge&logo=visualstudiocode&logoColor=white)
+![Git](https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white)
+![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white)
 
 ---
 
@@ -88,7 +91,7 @@
 | 자료 | 링크 |
 |------|------|
 | 📊 발표 PPT | [바로가기](링크를_입력하세요) |
-| 🎥 시연 영상 | [바로가기](링크를_입력하세요) |
+| 🎥 시연 영상 | [[바로가기](https://drive.google.com/file/d/1svThkDon2rmDInYUIPnXjvTBicqSaSFy/view?usp=sharing)] |
 
 ---
 
