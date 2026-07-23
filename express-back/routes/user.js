@@ -9,6 +9,7 @@ const router = express.Router();
 
 const multer = require('multer');
 const jwtAuthentication = require('../auth'); 
+const { sendNotification } = require('../utils/notiHelper');
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, 'uploads/'),
     filename: (req, file, cb) => {
@@ -710,6 +711,10 @@ router.post('/:nickname/follow', jwtAuthentication, async (req, res) => {
         { loginUserId, targetUserId },
         { autoCommit: true }
       );
+
+      // 팔로우 알림 발송
+      await sendNotification(targetUserId, loginUserId, 'FOLLOW', null, '님이 당신을 팔로우했습니다.');
+
       res.json({ result: true, message: "팔로우했습니다.", isFollowing: true });
     }
 

@@ -10,6 +10,9 @@ router.get('/', jwtAuthentication, async (req, res) => {
     try {
         connection = await db.getConnection();
         const userId = req.user?.id || req.userId;
+        const limit = parseInt(req.query.limit) || 10;
+        const offset = parseInt(req.query.offset) || 0;
+
         const sql = `
             SELECT 
                 N.NOTIFICATION_ID AS "id", 
@@ -24,9 +27,11 @@ router.get('/', jwtAuthentication, async (req, res) => {
             LEFT JOIN USERS U ON N.SENDER_ID = U.ID
             WHERE N.USER_ID = :userId 
             ORDER BY N.CREATED_AT DESC
+            OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
         `;
-        const result = await connection.execute(sql, { userId }, { outFormat: oracledb.OUT_FORMAT_OBJECT }); 
-        res.json({ result: true, notifications: result.rows });
+
+        const result = await connection.execute(sql, { userId, offset, limit }, { outFormat: oracledb.OUT_FORMAT_OBJECT }); 
+        res.json({ result: true, notifications: result.rows, hasMore: result.rows.length === limit });
     } catch (error) {
         console.error('알림 목록 조회 에러:', error);
         res.status(500).json({ result: false });
