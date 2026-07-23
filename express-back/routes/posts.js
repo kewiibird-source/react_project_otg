@@ -4,6 +4,7 @@ const fs = require('fs');
 const db = require("../db");
 const jwtAuthentication = require('../auth'); 
 const multer = require('multer');
+const path = require('path');
 const { sendNotification } = require('../utils/notiHelper');
 
 oracledb.fetchAsString = [oracledb.CLOB];
@@ -56,6 +57,15 @@ router.post('/', jwtAuthentication, upload.array('images', 5), async (req, res) 
             for (let tagName of hashtags) {
                 const cleanTagName = tagName.replace(/^#/, '').trim();
                 if (!cleanTagName) continue; 
+
+                // DB 컬럼(VARCHAR2(50 BYTE)) 초과 방지용 사전 검증
+                const byteLength = Buffer.byteLength(cleanTagName, 'utf8');
+                if (byteLength > 50) {
+                    const err = new Error(`해시태그 "${cleanTagName}"가 너무 깁니다. (${byteLength}바이트, 최대 50바이트)`);
+                    err.isValidation = true;
+                    throw err;
+                }
+
                 let currentHashtagId;
                 const checkResult = await connection.execute(`SELECT ID FROM HASHTAGS WHERE NAME = :name`, { name: cleanTagName }, txOptions);
                 if (checkResult.rows.length > 0) currentHashtagId = checkResult.rows[0].ID;
@@ -93,8 +103,22 @@ router.post('/', jwtAuthentication, upload.array('images', 5), async (req, res) 
         }
     } catch (error) {
         if (connection) { try { await connection.rollback(); } catch (e) {} }
-        if (files.length > 0) files.forEach(file => { if (fs.existsSync(file.path)) fs.unlinkSync(file.path); });
-        console.error('\n🚨 [POST /] 글 작성 에러:\n', error); res.status(500).json({ result: false });
+        if (files.length > 0) {
+        files.forEach(file => {
+            const absPath = path.resolve(file.path);
+            if (fs.existsSync(absPath)) {
+                fs.unlinkSync(absPath);
+                console.log('🗑️ 롤백으로 인한 파일 삭제 완료:', absPath);
+            } else {
+                console.warn('⚠️ 삭제 대상 파일을 찾지 못함:', absPath);
+            }
+        });
+    }
+        console.error('\n🚨 [POST /] 글 작성 에러:\n', error);
+        if (error.isValidation) {
+            return res.status(400).json({ result: false, message: error.message });
+        }
+        res.status(500).json({ result: false });
     } finally { if (connection) await connection.close(); }
 });
 
